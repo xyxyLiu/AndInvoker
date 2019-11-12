@@ -29,7 +29,7 @@ dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
 }
 
-version = "0.１"
+version = "0.1"
 group = "com.reginald"
 
 def siteUrl = 'https://github.com/xyxyLiu/AndInvoker'    // project homepage
@@ -74,7 +74,7 @@ bintray {
     configurations = ['archives']
     pkg {
         repo = "maven"
-        name = "andresm"
+        name = "AndInvoker"
         websiteUrl = siteUrl
         vcsUrl = gitUrl
         licenses = ["Apache-2.0"]
