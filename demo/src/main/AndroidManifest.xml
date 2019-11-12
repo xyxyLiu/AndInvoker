@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.reginald.andinvoker.demo">
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true">
+        <activity
+            android:name=".ActivityProcessA"
+            android:process=":a"
+            >
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".ActivityProcessB"
+            android:process=":b" />
+
+        <provider
+            android:name=".Providers$A"
+            android:authorities="${applicationId}.process.a"
+            android:process=":a"/>
+
+        <provider
+            android:name=".Providers$B"
+            android:authorities="${applicationId}.process.b"
+            android:process=":b" />
+    </application>
+
+</manifest>

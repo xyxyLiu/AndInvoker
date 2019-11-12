@@ -1,0 +1,2 @@
+include ':demo', ':andinvoker'
+rootProject.name='AndInvoker'

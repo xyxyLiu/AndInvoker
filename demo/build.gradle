@@ -1,0 +1,36 @@
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 28
+    defaultConfig {
+        applicationId "com.reginald.andinvoker.demo"
+        minSdkVersion 9
+        targetSdkVersion 28
+    }
+
+    signingConfigs {
+        release {
+            storeFile file("../pluginm-test.keystore")
+            storePassword "pluginm"
+            keyAlias "pluginm"
+            keyPassword "pluginm"
+        }
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        release {
+            minifyEnabled true
+            signingConfig signingConfigs.release
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation project(':andinvoker')
+}
