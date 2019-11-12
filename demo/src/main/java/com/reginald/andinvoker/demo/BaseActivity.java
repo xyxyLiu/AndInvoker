@@ -6,9 +6,11 @@ import android.content.Intent;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.Process;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.TextView;
 
 import com.reginald.andinvoker.AndInvoker;
 import com.reginald.andinvoker.api.IInvokeCallback;
@@ -21,6 +23,9 @@ public class BaseActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_base);
 
+        TextView title = findViewById(R.id.title);
+        title.setText(getTag());
+
         Button btn1 = findViewById(R.id.btn1);
         btn1.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -29,6 +34,7 @@ public class BaseActivity extends Activity {
                 startActivity(intent);
             }
         });
+
         Button btn2 = findViewById(R.id.btn2);
         btn2.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -49,6 +55,14 @@ public class BaseActivity extends Activity {
             @Override
             public void onClick(View view) {
                 invoke(getPackageName() + ".process.b");
+            }
+        });
+
+        Button btn5 = findViewById(R.id.btn5);
+        btn5.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Process.killProcess(Process.myPid());
             }
         });
     }

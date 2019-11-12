@@ -33,7 +33,7 @@ public abstract class InvokeCallbackWrapper extends InvokeCallback.Stub {
                 try {
                     return callback.onCallback(params);
                 } catch (RemoteException e) {
-                    e.printStackTrace();
+                    // ignore ...
                 }
 
                 return null;

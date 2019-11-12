@@ -146,7 +146,9 @@ public class AndInvoker {
         try {
             return invoke(context, provider, serviceName, methodName, params, callback);
         } catch (Throwable t) {
-            t.printStackTrace();
+            if (LogUtil.LOG_ENABLED) {
+                t.printStackTrace();
+            }
         }
 
         return null;
@@ -163,7 +165,9 @@ public class AndInvoker {
         try {
             return fetchService(context, provider, serviceName);
         } catch (Throwable t) {
-            t.printStackTrace();
+            if (LogUtil.LOG_ENABLED) {
+                t.printStackTrace();
+            }
         }
 
         return null;
@@ -182,7 +186,9 @@ public class AndInvoker {
         try {
             return registerInvoker(context, provider, serviceName, invoker);
         } catch (Throwable t) {
-            t.printStackTrace();
+            if (LogUtil.LOG_ENABLED) {
+                t.printStackTrace();
+            }
         }
 
         return false;
@@ -200,7 +206,9 @@ public class AndInvoker {
         try {
             return unregisterInvoker(context, provider, serviceName);
         } catch (Throwable t) {
-            t.printStackTrace();
+            if (LogUtil.LOG_ENABLED) {
+                t.printStackTrace();
+            }
         }
 
         return false;
@@ -217,8 +225,10 @@ public class AndInvoker {
             final ProviderInfo info = context.getPackageManager().resolveContentProvider(
                     provider, PackageManager.MATCH_DEFAULT_ONLY);
             return info;
-        } catch (Exception e) {
-            // ignore ...
+        } catch (Throwable t) {
+            if (LogUtil.LOG_ENABLED) {
+                t.printStackTrace();
+            }
         }
         return null;
     }

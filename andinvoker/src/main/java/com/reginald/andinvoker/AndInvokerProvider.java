@@ -28,16 +28,14 @@ public class AndInvokerProvider extends ContentProvider {
     private static final String TAG = "AndInvokerProvider";
 
     private static InvokerBridge sInvokerStub;
-    private static Context sContext;
 
     public static final String KEY_SERVICE = "key.service";
     public static final String METHOD_GET_INVOKER = "method.get_invoker";
 
     @Override
     public boolean onCreate() {
-        sContext = getContext();
         if (sInvokerStub == null) {
-            sInvokerStub = InvokerStub.build(sContext, AndInvoker.sIInvokerClassMap);
+            sInvokerStub = InvokerStub.build(getContext(), AndInvoker.sIInvokerClassMap);
             LogUtil.d(TAG, "onCreate() sInvokerStub = " + sInvokerStub);
         }
         return true;
@@ -88,7 +86,7 @@ public class AndInvokerProvider extends ContentProvider {
     static class InvokerStub extends InvokerBridge.Stub {
         private String TAG = "InvokerStub";
         private final Map<String, IInvoker> mLocalCacheMap = new ConcurrentHashMap<>();
-        private final Map<String, InvokerBridge> mRemoteCacheMap = new HashMap<>();
+        private final Map<String, BridgeRecord> mRemoteCacheMap = new HashMap<>();
         private final Map<String, IBinder> mBinderCacheMap = new HashMap<>();
 
         private final Context mContext;
@@ -140,8 +138,10 @@ public class AndInvokerProvider extends ContentProvider {
                         }
                         return resultInvoker;
                     }
-                } catch (Exception e) {
-                    e.printStackTrace();
+                } catch (Throwable t) {
+                    if (LogUtil.LOG_ENABLED) {
+                        t.printStackTrace();
+                    }
                 }
             }
 
@@ -160,7 +160,8 @@ public class AndInvokerProvider extends ContentProvider {
             }
 
             synchronized (mRemoteCacheMap) {
-                InvokerBridge invokerBridge = mRemoteCacheMap.get(serviceName);
+                BridgeRecord bridgeRecord = mRemoteCacheMap.get(serviceName);
+                InvokerBridge invokerBridge = bridgeRecord != null ? bridgeRecord.bridge : null;
                 LogUtil.w(TAG, String.format("fetchRemote() registered invokerBridge = %s",
                         mRemoteCacheMap.size(), invokerBridge));
 
@@ -263,31 +264,84 @@ public class AndInvokerProvider extends ContentProvider {
                 } else {
                     final IBinder iBinder = bridge.asBinder();
                     if (iBinder != null) {
-                        iBinder.linkToDeath(new IBinder.DeathRecipient() {
-                            @Override
-                            public void binderDied() {
-                                iBinder.unlinkToDeath(this, 0);
-                                synchronized (mRemoteCacheMap) {
-                                    mRemoteCacheMap.remove(serviceName);
-                                }
-                                onRemoteInvokerDied(serviceName);
-                            }
-                        }, 0);
-                        mRemoteCacheMap.put(serviceName, bridge);
+                        // remove old bridge first
+                        BridgeRecord oldBridge = mRemoteCacheMap.remove(serviceName);
+                        if (oldBridge != null) {
+                            oldBridge.unlinkToDeath();
+                            LogUtil.d(TAG, "register() serviceName = %s, remove old bridge %s",
+                                    serviceName, oldBridge);
+                        }
+
+                        // add new bridge
+                        BridgeRecord br = new BridgeRecord(serviceName, bridge);
+                        br.linkToDeath();
+                        mRemoteCacheMap.put(serviceName, br);
                         return true;
                     }
                 }
-
-                LogUtil.d(TAG, "register() serviceName = %s, bridge = %s, size = %d",
-                        serviceName, bridge, mRemoteCacheMap.size());
             }
 
             return false;
+        }
+
+        private class BridgeRecord {
+            public final String serviceName;
+            public final InvokerBridge bridge;
+            public IBinder iBinder;
+            private BinderDeath mBd;
+
+            public BridgeRecord(String serviceName, InvokerBridge invokerBridge) {
+                this.serviceName = serviceName;
+                this.bridge = invokerBridge;
+                this.iBinder = invokerBridge.asBinder();
+            }
+
+            public void linkToDeath() throws RemoteException {
+                synchronized (this) {
+                    if (iBinder != null && mBd == null) {
+                        mBd = new BinderDeath(this);
+                        iBinder.linkToDeath(mBd, 0);
+                    }
+                }
+            }
+
+            public void unlinkToDeath() {
+                synchronized (this) {
+                    if (iBinder != null && mBd != null) {
+                        iBinder.unlinkToDeath(mBd, 0);
+                        iBinder = null;
+                        mBd = null;
+                    }
+                }
+            }
+
+            private class BinderDeath implements IBinder.DeathRecipient {
+                private final BridgeRecord mBr;
+
+                BinderDeath(BridgeRecord br) {
+                    mBr = br;
+                }
+
+                public void binderDied() {
+                    synchronized (mBr) {
+                        if (mBr.iBinder == null) {
+                            return;
+                        }
+
+                        mBr.iBinder.unlinkToDeath(this, 0);
+                        mBr.iBinder = null;
+
+                        synchronized (mRemoteCacheMap) {
+                            mRemoteCacheMap.remove(serviceName);
+                        }
+                        onRemoteInvokerDied(serviceName);
+                    }
+                }
+            }
         }
 
         private void onRemoteInvokerDied(String serviceName) {
             LogUtil.e(TAG, "onRemoteInvokerDied() serviceName = " + serviceName);
         }
     }
-
 }
