@@ -1,6 +1,4 @@
 apply plugin: 'com.android.library'
-apply plugin: 'com.github.dcendents.android-maven'
-apply plugin: 'com.jfrog.bintray'
 
 android {
     compileSdkVersion 28
@@ -29,58 +27,32 @@ dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
 }
 
-version = "0.1"
-group = "com.reginald"
+// bintray upload
+ext {
+    bintrayRepo = 'maven'
+    bintrayName = 'AndInvoker'   // Has to be same as your library module name
 
-def siteUrl = 'https://github.com/xyxyLiu/AndInvoker'    // project homepage
-def gitUrl = 'https://github.com/xyxyLiu/AndInvoker.git' // project git
+    publishedGroupId = 'com.reginald'
+    libraryName = 'AndInvoker'
+    artifact = 'andinvoker'     // Has to be same as your library module name
 
-install {
-    repositories.mavenInstaller {
-        // This generates POM.xml with proper parameters
-        pom {
-            project {
-                name 'AndInvoker'
-                url siteUrl
-                licenses {
-                    license {
-                        name 'The Apache Software License, Version 2.0'
-                        url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                    }
-                }
-                developers {
-                    developer {
-                        id 'xyxyLiu'
-                        name 'xyxyLiu'
-                        email 'tonyreginald@gmail.com'
-                    }
-                }
-                scm {
-                    connection gitUrl
-                    developerConnection gitUrl
-                    url siteUrl
-                }
-            }
-        }
-    }
+    libraryDescription = 'a tiny Android rpc framework'
+
+    // Your github repo link
+    siteUrl = 'https://github.com/xyxyLiu/AndInvoker'
+    gitUrl = 'git@github.com:xyxyLiu/AndInvoker.git'
+    githubRepository= 'xyxyLiu/AndInvoker'
+
+    libraryVersion = '0.1'
+
+    developerId = 'xyxyLiu'
+    developerName = 'xyxyLiu'
+    developerEmail = 'tonyreginald@gmail.com'
+
+    licenseName = 'The Apache Software License, Version 2.0'
+    licenseUrl = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+    allLicenses = ["Apache-2.0"]
 }
 
-Properties properties = new Properties()
-properties.load(project.rootProject.file('local.properties').newDataInputStream())
-
-bintray {
-    user = properties.getProperty("bintray.user")
-    key = properties.getProperty("bintray.apikey")
-    configurations = ['archives']
-    pkg {
-        repo = "maven"
-        name = "AndInvoker"
-        websiteUrl = siteUrl
-        vcsUrl = gitUrl
-        licenses = ["Apache-2.0"]
-        publish = true
-        version {
-            name = '0.1'
-        }
-    }
-}
+apply from: 'https://raw.githubusercontent.com/nisrulz/JCenter/master/installv1.gradle'
+apply from: 'https://raw.githubusercontent.com/nisrulz/JCenter/master/bintrayv1.gradle'
