@@ -21,8 +21,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 远程调用API类
- * 所有涉及远程调用的IInvoker注册/反注册，invoke调用，service获取接口都在此类
+ * IInvoker register/unregister/invoker/fetchService APIs
  */
 public class AndInvoker {
     private static final String TAG = "AndInvoker";
@@ -31,13 +30,10 @@ public class AndInvoker {
     static final Map<String, Class> sIInvokerClassMap = new ConcurrentHashMap<>();
 
     /**
-     * 本地静态注册IInvoker。
-     * 适用于在本进程注册了InvokerProvider。
+     * register IInvoker in the current process statically if a ContentProvider is registered in the same process
      * @param context Context
-     * @param serviceName 要注册的服务名称, 建议将包名作为前缀。例如， com.baidu.app1.serviceA
-     * @param iInvokerClass 要注册的IInvoker的Class
-     * @return 是否成功
-     * @throws InvokeException 抛出InvokeException时代表注册失败。
+     * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
+     * @param iInvokerClass type of IInvoker
      */
     public static void registerLocalInvoker(Context context, String serviceName,
             Class<? extends IInvoker> iInvokerClass) throws InvokeException {
@@ -47,15 +43,15 @@ public class AndInvoker {
     }
 
     /**
-     * IInvoker函数式调用
+     * invoke IInvoker
      * @param context Context
-     * @param provider 服务提供者（ContentProvider）的 authorities
-     * @param serviceName 服务名称
-     * @param methodName 方法名
-     * @param params 参数
-     * @param callback 回调
-     * @return 返回值
-     * @throws InvokeException 抛出InvokeException时代表调用失败。
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName
+     * @param methodName methodName
+     * @param params params
+     * @param callback callback
+     * @return result
+     * @throws InvokeException InvokeException throws if invoke fails
      */
     public static Bundle invoke(Context context, String provider, String serviceName,
             String methodName, Bundle params, IInvokeCallback callback) throws InvokeException {
@@ -76,12 +72,12 @@ public class AndInvoker {
     }
 
     /**
-     * 获取Binder服务
+     * fetch binder service from IInvoker
      * @param context Context
-     * @param provider 服务提供者（ContentProvider）的 authorities
-     * @param serviceName 服务名称
-     * @return 服务binder
-     * @throws InvokeException 抛出InvokeException时代表调用失败。
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName
+     * @return binder service or null
+     * @throws InvokeException InvokeException throws if fetch fails
      */
     public static IBinder fetchService(Context context, String provider, String serviceName)
             throws InvokeException {
@@ -101,13 +97,13 @@ public class AndInvoker {
     }
 
     /**
-     * 动态注册IInvoker
+     * register IInvoker dynamically
      * @param context Context
-     * @param provider 注册目标服务提供者（ContentProvider）的 authorities
-     * @param serviceName 要注册的服务名称, 建议将包名作为前缀。例如， com.baidu.app1.serviceA
-     * @param invoker 要注册的IInvoker
-     * @return 是否成功
-     * @throws InvokeException 抛出InvokeException时代表注册失败。
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName
+     * @param invoker instance of IInvoker
+     * @return if success
+     * @throws InvokeException InvokeException throws if register fails
      */
     public static boolean registerInvoker(Context context, String provider, String serviceName,
             IInvoker invoker) throws InvokeException {
@@ -119,12 +115,12 @@ public class AndInvoker {
     }
 
     /**
-     * 反动态注册IInvoker
+     * unregister IInvoker
      * @param context Context
-     * @param provider 反注册目标服务提供者（ContentProvider）的 authorities
-     * @param serviceName 服务名称
-     * @return 是否成功
-     * @throws InvokeException 抛出InvokeException时代表反注册失败。
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName
+     * @return if success
+     * @throws InvokeException InvokeException throws if register fails
      */
     public static boolean unregisterInvoker(Context context, String provider, String serviceName)
             throws InvokeException {
@@ -132,14 +128,14 @@ public class AndInvoker {
     }
 
     /**
-     * IInvoker函数式调用，不抛异常
+     * invoke IInvoker, nothrow version
      * @param context Context
-     * @param provider 服务提供者（ContentProvider）的 authorities
-     * @param serviceName 服务名称
-     * @param methodName 方法名
-     * @param params 参数
-     * @param callback 回调
-     * @return 返回值。调用失败返回null。
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName
+     * @param methodName methodName
+     * @param params params
+     * @param callback callback
+     * @return result
      */
     public static Bundle invokeNoThrow(Context context, String provider, String serviceName,
             String methodName, Bundle params, IInvokeCallback callback) {
@@ -155,11 +151,11 @@ public class AndInvoker {
     }
 
     /**
-     * 获取Binder服务，不抛异常
+     * fetch binder service from IInvoker, nothrow version
      * @param context Context
-     * @param provider 服务提供者（ContentProvider）的 authorities
-     * @param serviceName 服务名称
-     * @return Binder服务， 调用失败返回null
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName
+     * @return binder service or null
      */
     public static IBinder fetchServiceNoThrow(Context context, String provider, String serviceName) {
         try {
@@ -174,12 +170,12 @@ public class AndInvoker {
     }
 
     /**
-     * 动态注册IInvoker，不抛异常
+     * register IInvoker dynamically, nothrow version
      * @param context Context
-     * @param provider 注册目标服务提供者（ContentProvider）的 authorities
-     * @param serviceName 要注册的服务名称, 建议将包名作为前缀。例如， com.baidu.app1.serviceA
-     * @param invoker 要注册的IInvoker
-     * @return 是否成功
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName
+     * @param invoker instance of IInvoker
+     * @return if success
      */
     public static boolean registerInvokerNoThrow(Context context, String provider,
             String serviceName, IInvoker invoker) {
@@ -195,11 +191,11 @@ public class AndInvoker {
     }
 
     /**
-     * 反动态注册IInvoker，不抛异常
+     * unregister IInvoker, nothrow version
      * @param context Context
-     * @param provider 反注册目标服务提供者（ContentProvider）的 authorities
-     * @param serviceName 服务名称
-     * @return 是否成功
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName
+     * @return if success
      */
     public static boolean unregisterInvokerNoThrow(Context context, String provider,
             String serviceName) {
@@ -215,10 +211,10 @@ public class AndInvoker {
     }
 
     /**
-     * 获取目标provider信息
+     * get provider info
      * @param context Context
-     * @param provider 服务提供者
-     * @return ProviderInfo
+     * @param provider authorities of ContentProvider
+     * @return ProviderInfo or null
      */
     public static ProviderInfo getProviderInfo(Context context, String provider) {
         try {

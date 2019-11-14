@@ -1,7 +1,7 @@
 package com.reginald.andinvoker;
 
 /**
- * 远程调用失败异常
+ * Remote Invoke Exception
  */
 public class InvokeException extends IllegalStateException {
 

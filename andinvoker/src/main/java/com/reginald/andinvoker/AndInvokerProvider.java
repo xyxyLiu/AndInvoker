@@ -22,7 +22,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * IInvoker注册载体，需要在注册IInvoker的进程声明该ContentProvider
+ * ContentProvider used for internal rpc. You must register this in AndroidManifest.xml for the process where IInovker registered
  */
 public class AndInvokerProvider extends ContentProvider {
     private static final String TAG = "AndInvokerProvider";

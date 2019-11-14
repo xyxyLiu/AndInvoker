@@ -9,9 +9,7 @@ import java.text.SimpleDateFormat;
 class LogUtil {
     public static final boolean LOG_ENABLED = false;
     public static final boolean ALWAYS_SHOW_ERROR = true;
-    /**
-     * 默认的文库日志Tag标签
-     */
+
     public static final String TAG = "AndInvoker";
 
     public static final SimpleDateFormat sSimpleDateFormat =

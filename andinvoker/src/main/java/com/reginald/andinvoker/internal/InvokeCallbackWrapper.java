@@ -6,10 +6,6 @@ import android.os.RemoteException;
 import com.reginald.andinvoker.api.IInvokeCallback;
 
 
-/**
- * Created by lxy on 17-9-21.
- */
-
 public abstract class InvokeCallbackWrapper extends InvokeCallback.Stub {
 
     public static InvokeCallbackWrapper build(final IInvokeCallback iInvokeCallback) {
