@@ -16,6 +16,10 @@ public class CommonUtils {
 
     private static volatile String sProcessName;
 
+    public static String getTag(Context context) {
+        return "process[" + CommonUtils.getCurrentProcessName(context) + "]";
+    }
+
     public static String getCurrentProcessName(Context cxt) {
         String processName = sProcessName;
         if (processName == null) {

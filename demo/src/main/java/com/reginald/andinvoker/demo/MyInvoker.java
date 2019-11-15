@@ -1,7 +1,6 @@
 package com.reginald.andinvoker.demo;
 
 import android.content.Context;
-import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.util.Log;
@@ -9,11 +8,15 @@ import android.util.Log;
 import com.reginald.andinvoker.api.IInvokeCallback;
 import com.reginald.andinvoker.api.IInvoker;
 
+import static com.reginald.andinvoker.demo.CommonUtils.getTag;
+
 public class MyInvoker implements IInvoker {
 
     @Override
     public IBinder onServiceCreate(Context context) {
-        return new Binder();
+        Log.d(getTag(context), String.format("onServiceCreate() in [process %s]",
+                CommonUtils.getCurrentProcessName(context)));
+        return new MyBinder(context);
     }
 
     @Override
@@ -28,9 +31,6 @@ public class MyInvoker implements IInvoker {
         return new Bundle();
     }
 
-    private static String getTag(Context context) {
-        return "process[" + CommonUtils.getCurrentProcessName(context) + "]";
-    }
 
     private static Bundle unparse(Bundle bundle) {
         bundle.size();

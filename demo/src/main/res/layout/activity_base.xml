@@ -28,14 +28,14 @@
 
     <Button
         android:id="@+id/btn3"
-        android:text="invoker services in process a"
+        android:text="call invoke/fetchService to process a"
         android:layout_margin="10dp"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />
 
     <Button
         android:id="@+id/btn4"
-        android:text="invoker services in process b"
+        android:text="call invoke/fetchService to process b"
         android:layout_margin="10dp"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />

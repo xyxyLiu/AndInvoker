@@ -1,10 +1,11 @@
 package com.reginald.andinvoker.demo;
 
 import android.app.Activity;
-import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.os.Process;
+import android.os.RemoteException;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -46,6 +47,8 @@ public class BaseActivity extends Activity {
             public void onClick(View view) {
                 invoke("serviceName", getPackageName() + ".process.a");
                 invoke("serviceName_remoteRegister", getPackageName() + ".process.a");
+                fetchBinder("serviceName", getPackageName() + ".process.a");
+                fetchBinder("serviceName_remoteRegister", getPackageName() + ".process.a");
             }
         });
         Button btn4 = findViewById(R.id.btn4);
@@ -54,6 +57,8 @@ public class BaseActivity extends Activity {
             public void onClick(View view) {
                 invoke("serviceName", getPackageName() + ".process.b");
                 invoke("serviceName_remoteRegister", getPackageName() + ".process.b");
+                fetchBinder("serviceName", getPackageName() + ".process.b");
+                fetchBinder("serviceName_remoteRegister", getPackageName() + ".process.b");
             }
         });
 
@@ -80,6 +85,30 @@ public class BaseActivity extends Activity {
         });
     }
 
+    private void fetchBinder(String serviceName, String provider) {
+        IBinder binderService = AndInvoker.fetchServiceNoThrow(BaseActivity.this, provider, serviceName);
+        if (binderService == null) {
+            Log.e(getTag(), String.format("fetchBinder() ERROR in [process %s] : " +
+                            "provider = %s, serviceName = %s",
+                    CommonUtils.getCurrentProcessName(this), provider, serviceName));
+        }
+
+        IMyBinder myBinder = IMyBinder.Stub.asInterface(binderService);
+        if (myBinder != null) {
+            String inParam = "inParam";
+            String[] outParam = new String[1];
+            try {
+                boolean result = myBinder.myMethod(inParam, outParam);
+                Log.d(getTag(), String.format("fetchBinder() binder call in [process %s] : provider = %s, " +
+                                "serviceName = %s, myBinder = %s, inParam = %s, outParam = %s, result = %s",
+                        CommonUtils.getCurrentProcessName(this), provider, serviceName,
+                        myBinder.asBinder(), inParam, outParam, result));
+            } catch (RemoteException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     private void invoke(String serviceName, String provider) {
         Bundle params = new Bundle();
         params.putString("param", "invoke from " + getTag());
@@ -104,11 +133,7 @@ public class BaseActivity extends Activity {
     }
 
     private String getTag() {
-        return getTag(this);
-    }
-
-    private static String getTag(Context context) {
-        return "process[" + CommonUtils.getCurrentProcessName(context) + "]";
+        return CommonUtils.getTag(this);
     }
 
     private static Bundle unparse(Bundle bundle) {
