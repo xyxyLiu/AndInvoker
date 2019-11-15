@@ -82,7 +82,7 @@ public class AndInvoker {
     }
 
     /**
-     * register IInvoker in remote process dynamically
+     * register IInvoker in remote process dynamically. Not Recommended!
      * @param context Context
      * @param provider authorities of ContentProvider
      * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
@@ -103,7 +103,6 @@ public class AndInvoker {
      * register IInvoker in the current process statically if a ContentProvider is registered in the same process
      * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
      * @param iInvokerClass type of IInvoker
-     * @hide
      */
     public static void registerInvoker(String serviceName,
             Class<? extends IInvoker> iInvokerClass) throws InvokeException {

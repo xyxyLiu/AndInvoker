@@ -11,6 +11,10 @@ repositories {
 }
 
 dependencies {
-    compile 'com.reginald:andinvoker:xxx'
+    implementation 'com.reginald:andinvoker:xxx'
 }
 ````
+
+## Usage
+
+see demo
