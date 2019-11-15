@@ -27,7 +27,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AndInvokerProvider extends ContentProvider {
     private static final String TAG = "AndInvokerProvider";
 
-    private static InvokerBridge sInvokerStub;
+    private static InvokerStub sInvokerStub;
+    private static final Map<String, Class> sIInvokerClassMap = new ConcurrentHashMap<>();
 
     public static final String KEY_SERVICE = "key.service";
     public static final String METHOD_GET_INVOKER = "method.get_invoker";
@@ -35,7 +36,7 @@ public class AndInvokerProvider extends ContentProvider {
     @Override
     public boolean onCreate() {
         if (sInvokerStub == null) {
-            sInvokerStub = InvokerStub.build(getContext(), AndInvoker.sIInvokerClassMap);
+            sInvokerStub = new InvokerStub(getContext());
             LogUtil.d(TAG, "onCreate() sInvokerStub = " + sInvokerStub);
         }
         return true;
@@ -82,30 +83,66 @@ public class AndInvokerProvider extends ContentProvider {
         return null;
     }
 
+    static void registerLocal(String serviceName, Class<? extends IInvoker> iInvokerClass) {
+        if (iInvokerClass != null) {
+            sIInvokerClassMap.put(serviceName, iInvokerClass);
+        }
+    }
 
-    static class InvokerStub extends InvokerBridge.Stub {
+    static boolean registerInvoker(Context context, InvokerBridge invokerBridge, String serviceName,
+            IInvoker invoker) throws InvokeException {
+        if (registerLocalInvoker(invokerBridge, serviceName, invoker)) {
+            return true;
+        } else {
+            try {
+                InvokerStub stub = null;
+                if (invoker != null) {
+                    stub = new InvokerStub(context);
+                    stub.mLocalCacheMap.put(serviceName, invoker);
+                }
+                return invokerBridge.register(serviceName, stub);
+            } catch (RemoteException e) {
+                throw new InvokeException(e);
+            }
+        }
+    }
+
+    private static boolean registerLocalInvoker(InvokerBridge invokerBridge, String serviceName,
+            IInvoker iInvoker) {
+        if (invokerBridge != sInvokerStub) {
+            return false;
+        }
+
+        if (sInvokerStub != null) {
+            Map<String, IInvoker> localCacheMap = sInvokerStub.mLocalCacheMap;
+            synchronized (localCacheMap) {
+                if (iInvoker == null) {
+                    localCacheMap.remove(serviceName);
+                    sIInvokerClassMap.remove(serviceName);
+                } else {
+                    localCacheMap.put(serviceName, iInvoker);
+                }
+            }
+            LogUtil.d(TAG, "registerLocal() for serviceName = %s, iInvoker = %s",
+                    serviceName, iInvoker);
+            return true;
+        }
+
+        return false;
+    }
+
+
+    private static class InvokerStub extends InvokerBridge.Stub {
         private String TAG = "InvokerStub";
-        private final Map<String, IInvoker> mLocalCacheMap = new ConcurrentHashMap<>();
+
+        final Map<String, IInvoker> mLocalCacheMap = new ConcurrentHashMap<>();
         private final Map<String, BridgeRecord> mRemoteCacheMap = new HashMap<>();
         private final Map<String, IBinder> mBinderCacheMap = new HashMap<>();
 
         private final Context mContext;
-        private Map<String, Class> mInvokerMap;
 
         private InvokerStub(Context context) {
             mContext = context;
-        }
-
-        public static InvokerBridge build(Context context, String serviceName, final IInvoker invoker) {
-            InvokerStub stub = new InvokerStub(context);
-            stub.mLocalCacheMap.put(serviceName, invoker);
-            return stub;
-        }
-
-        public static InvokerBridge build(Context context, final Map<String, Class> invokerMap) {
-            InvokerStub stub = new InvokerStub(context);
-            stub.mInvokerMap = invokerMap;
-            return stub;
         }
 
         private IInvoker fetchLocal(String serviceName) {
@@ -127,13 +164,13 @@ public class AndInvokerProvider extends ContentProvider {
                 }
 
                 try {
-                    Class<?> invokerClazz = mInvokerMap.get(serviceName);
+                    Class<?> invokerClazz = sIInvokerClassMap.get(serviceName);
                     if (invokerClazz != null) {
                         resultInvoker = (IInvoker) invokerClazz.newInstance();
 
                         if (resultInvoker != null) {
-                            LogUtil.d(TAG, "fetchLocal() serviceName = %s, get new %s",
-                                    serviceName, resultInvoker);
+                            LogUtil.d(TAG, "fetchLocal() serviceName = %s, new invoker from class %s",
+                                    serviceName, invokerClazz);
                             mLocalCacheMap.put(serviceName, resultInvoker);
                         }
                         return resultInvoker;
@@ -145,7 +182,7 @@ public class AndInvokerProvider extends ContentProvider {
                 }
             }
 
-            LogUtil.w(TAG, String.format("fetchLocal() error for %s",
+            LogUtil.w(TAG, String.format("fetchLocal() no invoker found for %s",
                     serviceName));
 
             return null;
@@ -176,7 +213,7 @@ public class AndInvokerProvider extends ContentProvider {
                 }
             }
 
-            LogUtil.w(TAG, String.format("fetchRemote() error for %s",
+            LogUtil.w(TAG, String.format("fetchRemote() no invoker found for %s",
                     serviceName));
 
             return null;
@@ -341,7 +378,7 @@ public class AndInvokerProvider extends ContentProvider {
         }
 
         private void onRemoteInvokerDied(String serviceName) {
-            LogUtil.e(TAG, "onRemoteInvokerDied() serviceName = " + serviceName);
+            LogUtil.w(TAG, "onRemoteInvokerDied() serviceName = " + serviceName);
         }
     }
 }

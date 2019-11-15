@@ -28,14 +28,21 @@
 
     <Button
         android:id="@+id/btn3"
-        android:text="invoker in service1 in process a"
+        android:text="invoker services in process a"
         android:layout_margin="10dp"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />
 
     <Button
         android:id="@+id/btn4"
-        android:text="invoker in service1 in process b"
+        android:text="invoker services in process b"
+        android:layout_margin="10dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <Button
+        android:id="@+id/btn6"
+        android:text="unregister serviceName invokers in process a"
         android:layout_margin="10dp"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />

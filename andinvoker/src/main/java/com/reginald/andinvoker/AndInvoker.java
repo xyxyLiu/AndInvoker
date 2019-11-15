@@ -18,7 +18,6 @@ import com.reginald.andinvoker.internal.InvokerBridge;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * IInvoker register/unregister/invoker/fetchService APIs
@@ -27,20 +26,6 @@ public class AndInvoker {
     private static final String TAG = "AndInvoker";
 
     private static final Map<String, InvokerBridge> sInvokerClientMap = new HashMap<>(2);
-    static final Map<String, Class> sIInvokerClassMap = new ConcurrentHashMap<>();
-
-    /**
-     * register IInvoker in the current process statically if a ContentProvider is registered in the same process
-     * @param context Context
-     * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
-     * @param iInvokerClass type of IInvoker
-     */
-    public static void registerLocalInvoker(Context context, String serviceName,
-            Class<? extends IInvoker> iInvokerClass) throws InvokeException {
-        if (iInvokerClass != null) {
-            sIInvokerClassMap.put(serviceName, iInvokerClass);
-        }
-    }
 
     /**
      * invoke IInvoker
@@ -97,20 +82,33 @@ public class AndInvoker {
     }
 
     /**
-     * register IInvoker dynamically
+     * register IInvoker in remote process dynamically
      * @param context Context
      * @param provider authorities of ContentProvider
-     * @param serviceName serviceName
+     * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
      * @param invoker instance of IInvoker
      * @return if success
      * @throws InvokeException InvokeException throws if register fails
      */
-    public static boolean registerInvoker(Context context, String provider, String serviceName,
+    public static boolean registerRemoteInvoker(Context context, String provider, String serviceName,
             IInvoker invoker) throws InvokeException {
         if (invoker != null) {
             return registerInvokerInternal(context, provider, serviceName, invoker);
         } else {
             return false;
+        }
+    }
+
+    /**
+     * register IInvoker in the current process statically if a ContentProvider is registered in the same process
+     * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
+     * @param iInvokerClass type of IInvoker
+     * @hide
+     */
+    public static void registerInvoker(String serviceName,
+            Class<? extends IInvoker> iInvokerClass) throws InvokeException {
+        if (iInvokerClass != null) {
+            AndInvokerProvider.registerLocal(serviceName, iInvokerClass);
         }
     }
 
@@ -170,17 +168,17 @@ public class AndInvoker {
     }
 
     /**
-     * register IInvoker dynamically, nothrow version
+     * register IInvoker in remote process dynamically, nothrow version
      * @param context Context
      * @param provider authorities of ContentProvider
      * @param serviceName serviceName
      * @param invoker instance of IInvoker
      * @return if success
      */
-    public static boolean registerInvokerNoThrow(Context context, String provider,
+    public static boolean registerRemoteInvokerNoThrow(Context context, String provider,
             String serviceName, IInvoker invoker) {
         try {
-            return registerInvoker(context, provider, serviceName, invoker);
+            return registerRemoteInvoker(context, provider, serviceName, invoker);
         } catch (Throwable t) {
             if (LogUtil.LOG_ENABLED) {
                 t.printStackTrace();
@@ -191,7 +189,7 @@ public class AndInvoker {
     }
 
     /**
-     * unregister IInvoker, nothrow version
+     * unregister IInvoker dynamically, nothrow version
      * @param context Context
      * @param provider authorities of ContentProvider
      * @param serviceName serviceName
@@ -233,15 +231,7 @@ public class AndInvoker {
             IInvoker invoker) throws InvokeException {
         InvokerBridge invokerManager = ensureService(context, provider);
         if (invokerManager != null) {
-            try {
-                InvokerBridge stub = null;
-                if (invoker != null) {
-                    stub = AndInvokerProvider.InvokerStub.build(context, serviceName, invoker);
-                }
-                return invokerManager.register(serviceName, stub);
-            } catch (RemoteException e) {
-                throw new InvokeException(e);
-            }
+            return AndInvokerProvider.registerInvoker(context, invokerManager, serviceName, invoker);
         }
 
         return false;
@@ -297,6 +287,6 @@ public class AndInvoker {
     }
 
     private static void onInvokerDied(String provider) {
-        LogUtil.e(TAG, "onInvokerDied() provider = " + provider);
+        LogUtil.w(TAG, "onInvokerDied() provider = " + provider);
     }
 }

@@ -3,9 +3,7 @@ package com.reginald.andinvoker.demo;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.os.Binder;
 import android.os.Bundle;
-import android.os.IBinder;
 import android.os.Process;
 import android.util.Log;
 import android.view.View;
@@ -14,7 +12,6 @@ import android.widget.TextView;
 
 import com.reginald.andinvoker.AndInvoker;
 import com.reginald.andinvoker.api.IInvokeCallback;
-import com.reginald.andinvoker.api.IInvoker;
 
 public class BaseActivity extends Activity {
 
@@ -47,14 +44,16 @@ public class BaseActivity extends Activity {
         btn3.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                invoke(getPackageName() + ".process.a");
+                invoke("serviceName", getPackageName() + ".process.a");
+                invoke("serviceName_remoteRegister", getPackageName() + ".process.a");
             }
         });
         Button btn4 = findViewById(R.id.btn4);
         btn4.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                invoke(getPackageName() + ".process.b");
+                invoke("serviceName", getPackageName() + ".process.b");
+                invoke("serviceName_remoteRegister", getPackageName() + ".process.b");
             }
         });
 
@@ -65,12 +64,25 @@ public class BaseActivity extends Activity {
                 Process.killProcess(Process.myPid());
             }
         });
+
+        Button btn6 = findViewById(R.id.btn6);
+        btn6.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                String provider = getPackageName() + ".process.a";
+                String serviceName = "serviceName";
+                if (!AndInvoker.unregisterInvokerNoThrow(BaseActivity.this, provider, serviceName)) {
+                    Log.e(getTag(), String.format("unregisterInvoker in [process %s] error!" +
+                                    "provider = %s, serviceName = %s",
+                            CommonUtils.getCurrentProcessName(BaseActivity.this), provider, serviceName));
+                }
+            }
+        });
     }
 
-    private void invoke(String provider) {
+    private void invoke(String serviceName, String provider) {
         Bundle params = new Bundle();
         params.putString("param", "invoke from " + getTag());
-        String serviceName = "serviceName";
         String methodName = "methodName";
         IInvokeCallback callback = new IInvokeCallback() {
             @Override
@@ -80,37 +92,26 @@ public class BaseActivity extends Activity {
                 return null;
             }
         };
-        Log.d(getTag(), String.format("invoke() in [process %s] : serviceName = %s, methodName = %s, params = %s, callback = %s",
-                CommonUtils.getCurrentProcessName(this), serviceName, methodName, unparse(params), callback));
-        AndInvoker.invoke(BaseActivity.this, provider, serviceName,
-                methodName, params, callback);
-    }
-
-    class BaseInvoker implements IInvoker {
-
-        @Override
-        public IBinder onServiceCreate(Context context) {
-            return new Binder();
-        }
-
-        @Override
-        public Bundle onInvoke(Context context, String methodName, Bundle params, IInvokeCallback callback) {
-            Log.d(getTag(), String.format("onInvoke() in [process %s] : methodName = %s, params = %s, callback = %s",
-                    CommonUtils.getCurrentProcessName(context), methodName, unparse(params), callback));
-            if (callback != null) {
-                Bundle data = new Bundle();
-                data.putString("param", "callback from " + getTag());
-                callback.onCallback(data);
-            }
-            return new Bundle();
+        Log.d(getTag(), String.format("invoke() in [process %s] : " +
+                        "provider = %s, serviceName = %s, methodName = %s, params = %s, callback = %s",
+                CommonUtils.getCurrentProcessName(this), provider, serviceName, methodName, unparse(params), callback));
+        if (AndInvoker.invokeNoThrow(BaseActivity.this, provider, serviceName,
+                methodName, params, callback) == null) {
+            Log.e(getTag(), String.format("invoke() ERROR in [process %s] : " +
+                            "provider = %s, serviceName = %s, methodName = %s, params = %s, callback = %s",
+                    CommonUtils.getCurrentProcessName(this), provider, serviceName, methodName, unparse(params), callback));
         }
     }
 
     private String getTag() {
-        return "process[" + CommonUtils.getCurrentProcessName(this) + "]";
+        return getTag(this);
     }
 
-    private Bundle unparse(Bundle bundle) {
+    private static String getTag(Context context) {
+        return "process[" + CommonUtils.getCurrentProcessName(context) + "]";
+    }
+
+    private static Bundle unparse(Bundle bundle) {
         bundle.size();
         return bundle;
     }
