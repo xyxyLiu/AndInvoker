@@ -14,6 +14,6 @@ public class ActivityProcessA extends BaseActivity {
 
         // register invoker in remote process is not recommended in practice
         AndInvoker.registerRemoteInvoker(this, getPackageName() + ".process.b",
-                "serviceName_remoteRegister", new MyInvoker());
+                "serviceName_remoteRegister_from_a", new MyInvoker());
     }
 }

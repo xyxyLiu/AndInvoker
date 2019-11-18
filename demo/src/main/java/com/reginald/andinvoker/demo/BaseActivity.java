@@ -14,7 +14,11 @@ import android.widget.TextView;
 import com.reginald.andinvoker.AndInvoker;
 import com.reginald.andinvoker.api.IInvokeCallback;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 public class BaseActivity extends Activity {
+    private static final int INVOKE_TIMES = 1;
+    private static AtomicInteger sInvokeTimes = new AtomicInteger(0);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,20 +49,27 @@ public class BaseActivity extends Activity {
         btn3.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                invoke("serviceName", getPackageName() + ".process.a");
-                invoke("serviceName_remoteRegister", getPackageName() + ".process.a");
-                fetchBinder("serviceName", getPackageName() + ".process.a");
-                fetchBinder("serviceName_remoteRegister", getPackageName() + ".process.a");
+                for (int i = 0; i < INVOKE_TIMES; i++) {
+                    invoke("serviceName", getPackageName() + ".process.a");
+                    invoke("serviceName_remoteRegister_from_b",
+                            getPackageName() + ".process.a");
+                    fetchBinder("serviceName", getPackageName() + ".process.a");
+                    fetchBinder("serviceName_remoteRegister_from_b", getPackageName() + ".process.a");
+                }
             }
         });
         Button btn4 = findViewById(R.id.btn4);
         btn4.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                invoke("serviceName", getPackageName() + ".process.b");
-                invoke("serviceName_remoteRegister", getPackageName() + ".process.b");
-                fetchBinder("serviceName", getPackageName() + ".process.b");
-                fetchBinder("serviceName_remoteRegister", getPackageName() + ".process.b");
+                for (int i = 0; i < INVOKE_TIMES; i++) {
+                    invoke("serviceName", getPackageName() + ".process.b");
+                    invoke("serviceName_remoteRegister_from_a",
+                            getPackageName() + ".process.b");
+                    fetchBinder("serviceName", getPackageName() + ".process.b");
+                    fetchBinder("serviceName_remoteRegister_from_a",
+                            getPackageName() + ".process.b");
+                }
             }
         });
 
@@ -85,51 +96,72 @@ public class BaseActivity extends Activity {
         });
     }
 
-    private void fetchBinder(String serviceName, String provider) {
-        IBinder binderService = AndInvoker.fetchServiceNoThrow(BaseActivity.this, provider, serviceName);
-        if (binderService == null) {
-            Log.e(getTag(), String.format("fetchBinder() ERROR in [process %s] : " +
-                            "provider = %s, serviceName = %s",
-                    CommonUtils.getCurrentProcessName(this), provider, serviceName));
-        }
+    private void fetchBinder(final String serviceName, final String provider) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                IBinder binderService = AndInvoker.fetchServiceNoThrow(BaseActivity.this,
+                        provider, serviceName);
+                if (binderService == null) {
+                    Log.e(getTag(), String.format("fetchBinder() ERROR in [process %s] : " +
+                                    "provider = %s, serviceName = %s",
+                            CommonUtils.getCurrentProcessName(BaseActivity.this), provider, serviceName));
+                }
 
-        IMyBinder myBinder = IMyBinder.Stub.asInterface(binderService);
-        if (myBinder != null) {
-            String inParam = "inParam";
-            String[] outParam = new String[1];
-            try {
-                boolean result = myBinder.myMethod(inParam, outParam);
-                Log.d(getTag(), String.format("fetchBinder() binder call in [process %s] : provider = %s, " +
-                                "serviceName = %s, myBinder = %s, inParam = %s, outParam = %s, result = %s",
-                        CommonUtils.getCurrentProcessName(this), provider, serviceName,
-                        myBinder.asBinder(), inParam, outParam, result));
-            } catch (RemoteException e) {
-                e.printStackTrace();
+                IMyBinder myBinder = IMyBinder.Stub.asInterface(binderService);
+                if (myBinder != null) {
+                    String inParam = "inParam";
+                    String[] outParam = new String[1];
+                    try {
+                        boolean result = myBinder.myMethod(inParam, outParam);
+                        Log.d(getTag(), String.format("fetchBinder() binder call in [process %s] : provider = %s, " +
+                                        "serviceName = %s, myBinder = %s(remote: %s), inParam = %s, outParam = %s, result = %s",
+                                CommonUtils.getCurrentProcessName(BaseActivity.this), provider, serviceName,
+                                myBinder, myBinder.asBinder(), inParam, outParam, result));
+                    } catch (RemoteException e) {
+                        e.printStackTrace();
+                    }
+                }
             }
-        }
+        }).start();
+
     }
 
-    private void invoke(String serviceName, String provider) {
-        Bundle params = new Bundle();
-        params.putString("param", "invoke from " + getTag());
-        String methodName = "methodName";
-        IInvokeCallback callback = new IInvokeCallback() {
+    private void invoke(final String serviceName, final String provider) {
+        new Thread(new Runnable() {
             @Override
-            public Bundle onCallback(Bundle params) {
-                Log.d(getTag(), String.format("onCallback() in %s: params = %s",
-                        getTag(), unparse(params)));
-                return null;
+            public void run() {
+                Bundle params = new Bundle();
+                params.putString("param", "invoke from " + getTag());
+                String methodName = "methodName";
+                IInvokeCallback callback = new IInvokeCallback() {
+                    @Override
+                    public Bundle onCallback(Bundle params) {
+                        Log.d(getTag(), String.format("onCallback() in %s: params = %s",
+                                getTag(), unparse(params)));
+                        return null;
+                    }
+                };
+
+                int invokeTime = sInvokeTimes.addAndGet(1);
+                Log.d(getTag(), String.format("invoke() start in [process %s](%d) : " +
+                                "provider = %s, serviceName = %s, methodName = %s, params = %s, callback = %s",
+                        CommonUtils.getCurrentProcessName(BaseActivity.this), invokeTime,
+                        provider, serviceName, methodName, unparse(params), callback));
+                if (AndInvoker.invokeNoThrow(BaseActivity.this, provider, serviceName,
+                        methodName, params, callback) == null) {
+                    Log.e(getTag(), String.format("invoke() ERROR in [process %s] : " +
+                                    "provider = %s, serviceName = %s, methodName = %s, params = %s, callback = %s",
+                            CommonUtils.getCurrentProcessName(BaseActivity.this), provider, serviceName, methodName, unparse(params), callback));
+                }
+
+                Log.d(getTag(), String.format("invoke() finished in [process %s](%d) : " +
+                                "provider = %s, serviceName = %s, methodName = %s, params = %s, callback = %s",
+                        CommonUtils.getCurrentProcessName(BaseActivity.this), invokeTime,
+                        provider, serviceName, methodName, unparse(params), callback));
             }
-        };
-        Log.d(getTag(), String.format("invoke() in [process %s] : " +
-                        "provider = %s, serviceName = %s, methodName = %s, params = %s, callback = %s",
-                CommonUtils.getCurrentProcessName(this), provider, serviceName, methodName, unparse(params), callback));
-        if (AndInvoker.invokeNoThrow(BaseActivity.this, provider, serviceName,
-                methodName, params, callback) == null) {
-            Log.e(getTag(), String.format("invoke() ERROR in [process %s] : " +
-                            "provider = %s, serviceName = %s, methodName = %s, params = %s, callback = %s",
-                    CommonUtils.getCurrentProcessName(this), provider, serviceName, methodName, unparse(params), callback));
-        }
+        }).start();
+
     }
 
     private String getTag() {

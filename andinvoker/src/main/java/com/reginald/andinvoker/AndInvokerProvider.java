@@ -91,7 +91,8 @@ public class AndInvokerProvider extends ContentProvider {
 
     static boolean registerInvoker(Context context, InvokerBridge invokerBridge, String serviceName,
             IInvoker invoker) throws InvokeException {
-        if (registerLocalInvoker(invokerBridge, serviceName, invoker)) {
+        if (invokerBridge == sInvokerStub) {
+            sInvokerStub.registerLocalInvoker(serviceName, invoker);
             return true;
         } else {
             try {
@@ -107,37 +108,13 @@ public class AndInvokerProvider extends ContentProvider {
         }
     }
 
-    private static boolean registerLocalInvoker(InvokerBridge invokerBridge, String serviceName,
-            IInvoker iInvoker) {
-        if (invokerBridge != sInvokerStub) {
-            return false;
-        }
-
-        if (sInvokerStub != null) {
-            Map<String, IInvoker> localCacheMap = sInvokerStub.mLocalCacheMap;
-            synchronized (localCacheMap) {
-                if (iInvoker == null) {
-                    localCacheMap.remove(serviceName);
-                    sIInvokerClassMap.remove(serviceName);
-                } else {
-                    localCacheMap.put(serviceName, iInvoker);
-                }
-            }
-            LogUtil.d(TAG, "registerLocal() for serviceName = %s, iInvoker = %s",
-                    serviceName, iInvoker);
-            return true;
-        }
-
-        return false;
-    }
-
 
     private static class InvokerStub extends InvokerBridge.Stub {
         private String TAG = "InvokerStub";
 
         final Map<String, IInvoker> mLocalCacheMap = new ConcurrentHashMap<>();
         private final Map<String, BridgeRecord> mRemoteCacheMap = new HashMap<>();
-        private final Map<String, IBinder> mBinderCacheMap = new HashMap<>();
+        private final Map<String, IBinder> mBinderCacheMap = new ConcurrentHashMap<>();
 
         private final Context mContext;
 
@@ -196,20 +173,21 @@ public class AndInvokerProvider extends ContentProvider {
                 return null;
             }
 
+            InvokerBridge invokerBridge = null;
+
             synchronized (mRemoteCacheMap) {
                 BridgeRecord bridgeRecord = mRemoteCacheMap.get(serviceName);
-                InvokerBridge invokerBridge = bridgeRecord != null ? bridgeRecord.bridge : null;
+                invokerBridge = bridgeRecord != null ? bridgeRecord.bridge : null;
                 LogUtil.w(TAG, String.format("fetchRemote() registered invokerBridge = %s",
                         mRemoteCacheMap.size(), invokerBridge));
+            }
 
-
-                if (invokerBridge != null) {
-                    final IBinder iBinder = invokerBridge.asBinder();
-                    if (iBinder != null && iBinder.isBinderAlive()) {
-                        LogUtil.d(TAG, "fetchRemote() serviceName = %s, get cached alive %s",
-                                serviceName, invokerBridge);
-                        return invokerBridge;
-                    }
+            if (invokerBridge != null) {
+                final IBinder iBinder = invokerBridge.asBinder();
+                if (iBinder != null && iBinder.isBinderAlive()) {
+                    LogUtil.d(TAG, "fetchRemote() serviceName = %s, get cached alive %s",
+                            serviceName, invokerBridge);
+                    return invokerBridge;
                 }
             }
 
@@ -255,12 +233,16 @@ public class AndInvokerProvider extends ContentProvider {
                 throw new InvokeException(String.format("no valid serviceName for %s", serviceName));
             }
 
+            IBinder cachedBinder = fetchCachedBinder(serviceName);
+            if (cachedBinder != null) {
+                return cachedBinder;
+            }
+
             // fetch local
             synchronized (mBinderCacheMap) {
-                if (mBinderCacheMap.containsKey(serviceName)) {
-                    IBinder iBinder = mBinderCacheMap.get(serviceName);
-                    LogUtil.w(TAG, String.format("fetchService() cached binder = %s", iBinder));
-                    return iBinder;
+                cachedBinder = fetchCachedBinder(serviceName);
+                if (cachedBinder != null) {
+                    return cachedBinder;
                 }
 
                 IInvoker iInvoker = fetchLocal(serviceName);
@@ -271,7 +253,6 @@ public class AndInvokerProvider extends ContentProvider {
 
                     IBinder newBinder = iInvoker.onServiceCreate(mContext);
                     mBinderCacheMap.put(serviceName, newBinder);
-
                     return newBinder;
                 }
             }
@@ -296,6 +277,7 @@ public class AndInvokerProvider extends ContentProvider {
 
             synchronized (mRemoteCacheMap) {
                 if (bridge == null) {
+                    // remove remote registered ONLY
                     mRemoteCacheMap.remove(serviceName);
                     return true;
                 } else {
@@ -319,6 +301,45 @@ public class AndInvokerProvider extends ContentProvider {
             }
 
             return false;
+        }
+
+        private void registerLocalInvoker(String serviceName, IInvoker iInvoker) {
+
+            if (iInvoker == null) {
+                // remove local registered
+                synchronized (mLocalCacheMap) {
+                    mLocalCacheMap.remove(serviceName);
+                }
+                sIInvokerClassMap.remove(serviceName);
+
+                // remove remote registered
+                synchronized (mRemoteCacheMap) {
+                    mRemoteCacheMap.remove(serviceName);
+                }
+
+                // remove binder service registered
+                synchronized (mBinderCacheMap) {
+                    mBinderCacheMap.remove(serviceName);
+                }
+
+            } else {
+                synchronized (mLocalCacheMap) {
+                    mLocalCacheMap.put(serviceName, iInvoker);
+                }
+            }
+
+            LogUtil.d(TAG, "registerLocalInvoker() for serviceName = %s, iInvoker = %s",
+                    serviceName, iInvoker);
+        }
+
+        private IBinder fetchCachedBinder(String serviceName) {
+            IBinder cachedBinder = mBinderCacheMap.get(serviceName);
+            if (cachedBinder != null) {
+                LogUtil.w(TAG, String.format("fetchCachedBinder() cached binder = %s", cachedBinder));
+                return cachedBinder;
+            }
+
+            return null;
         }
 
         private class BridgeRecord {
@@ -368,9 +389,6 @@ public class AndInvokerProvider extends ContentProvider {
                         mBr.iBinder.unlinkToDeath(this, 0);
                         mBr.iBinder = null;
 
-                        synchronized (mRemoteCacheMap) {
-                            mRemoteCacheMap.remove(serviceName);
-                        }
                         onRemoteInvokerDied(serviceName);
                     }
                 }
@@ -379,6 +397,14 @@ public class AndInvokerProvider extends ContentProvider {
 
         private void onRemoteInvokerDied(String serviceName) {
             LogUtil.w(TAG, "onRemoteInvokerDied() serviceName = " + serviceName);
+
+            synchronized (mRemoteCacheMap) {
+                mRemoteCacheMap.remove(serviceName);
+            }
+
+            synchronized (mBinderCacheMap) {
+                mBinderCacheMap.remove(serviceName);
+            }
         }
     }
 }
