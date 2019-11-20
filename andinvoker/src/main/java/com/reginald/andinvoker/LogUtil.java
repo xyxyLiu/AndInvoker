@@ -6,7 +6,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.text.SimpleDateFormat;
 
-class LogUtil {
+public class LogUtil {
     public static final boolean LOG_ENABLED = false;
     public static final boolean ALWAYS_SHOW_ERROR = true;
 

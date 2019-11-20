@@ -12,8 +12,9 @@ import android.widget.Button;
 import android.widget.TextView;
 
 import com.reginald.andinvoker.AndInvoker;
-import com.reginald.andinvoker.api.IInvokeCallback;
+import com.reginald.andinvoker.api.ICall;
 
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class BaseActivity extends Activity {
@@ -23,6 +24,7 @@ public class BaseActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_base);
 
         TextView title = findViewById(R.id.title);
@@ -49,27 +51,14 @@ public class BaseActivity extends Activity {
         btn3.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                for (int i = 0; i < INVOKE_TIMES; i++) {
-                    invoke("serviceName", getPackageName() + ".process.a");
-                    invoke("serviceName_remoteRegister_from_b",
-                            getPackageName() + ".process.a");
-                    fetchBinder("serviceName", getPackageName() + ".process.a");
-                    fetchBinder("serviceName_remoteRegister_from_b", getPackageName() + ".process.a");
-                }
+                testProcess(Providers.A.SUFFIX);
             }
         });
         Button btn4 = findViewById(R.id.btn4);
         btn4.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                for (int i = 0; i < INVOKE_TIMES; i++) {
-                    invoke("serviceName", getPackageName() + ".process.b");
-                    invoke("serviceName_remoteRegister_from_a",
-                            getPackageName() + ".process.b");
-                    fetchBinder("serviceName", getPackageName() + ".process.b");
-                    fetchBinder("serviceName_remoteRegister_from_a",
-                            getPackageName() + ".process.b");
-                }
+                testProcess(Providers.B.SUFFIX);
             }
         });
 
@@ -85,15 +74,41 @@ public class BaseActivity extends Activity {
         btn6.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                String provider = getPackageName() + ".process.a";
-                String serviceName = "serviceName";
-                if (!AndInvoker.unregisterInvokerNoThrow(BaseActivity.this, provider, serviceName)) {
-                    Log.e(getTag(), String.format("unregisterInvoker in [process %s] error!" +
-                                    "provider = %s, serviceName = %s",
-                            CommonUtils.getCurrentProcessName(BaseActivity.this), provider, serviceName));
-                }
+                testUnregister(Providers.A.SUFFIX);
             }
         });
+    }
+
+    private void testProcess(String processSuffix) {
+        for (int i = 0; i < INVOKE_TIMES; i++) {
+            String provider = getPackageName() + processSuffix;
+            invoke("serviceName_invoker", provider);
+            invoke("serviceName_invoker_remoteRegister_to_" + processSuffix, provider);
+            invokeInterface("serviceName_interface", provider);
+            invokeInterface("serviceName_interface_remoteRegister_to_" + processSuffix, provider);
+            fetchBinder("serviceName_binder", provider);
+            fetchBinder("serviceName_binder_remoteRegister_to_" + processSuffix, provider);
+        }
+    }
+
+    private void testUnregister(String processSuffix) {
+        String provider = getPackageName() + processSuffix;
+
+        if (!AndInvoker.unregisterServiceNoThrow(BaseActivity.this, provider,
+                "serviceName_binder")) {
+            Log.e(getTag(), String.format("unregisterService in error!provider = %s, serviceName = %s",
+                    provider, "serviceName_binder"));
+        }
+
+        if (!AndInvoker.unregisterInvokerNoThrow(BaseActivity.this, provider, "serviceName_invoker")) {
+            Log.e(getTag(), String.format("unregisterInvoker in error! provider = %s, serviceName = %s",
+                    provider, "serviceName_invoker"));
+        }
+
+        if (!AndInvoker.unregisterInterfaceNoThrow(BaseActivity.this, provider, "serviceName_interface")) {
+            Log.e(getTag(), String.format("unregisterInterfaceerror! provider = %s, serviceName = %s",
+                    provider, "serviceName_interface"));
+        }
     }
 
     private void fetchBinder(final String serviceName, final String provider) {
@@ -103,9 +118,8 @@ public class BaseActivity extends Activity {
                 IBinder binderService = AndInvoker.fetchServiceNoThrow(BaseActivity.this,
                         provider, serviceName);
                 if (binderService == null) {
-                    Log.e(getTag(), String.format("fetchBinder() ERROR in [process %s] : " +
-                                    "provider = %s, serviceName = %s",
-                            CommonUtils.getCurrentProcessName(BaseActivity.this), provider, serviceName));
+                    Log.e(getTag(), String.format("fetchBinder() ERROR : provider = %s, serviceName = %s",
+                            provider, serviceName));
                 }
 
                 IMyBinder myBinder = IMyBinder.Stub.asInterface(binderService);
@@ -114,10 +128,9 @@ public class BaseActivity extends Activity {
                     String[] outParam = new String[1];
                     try {
                         boolean result = myBinder.myMethod(inParam, outParam);
-                        Log.d(getTag(), String.format("fetchBinder() binder call in [process %s] : provider = %s, " +
+                        Log.d(getTag(), String.format("fetchBinder() binder call: provider = %s, " +
                                         "serviceName = %s, myBinder = %s(remote: %s), inParam = %s, outParam = %s, result = %s",
-                                CommonUtils.getCurrentProcessName(BaseActivity.this), provider, serviceName,
-                                myBinder, myBinder.asBinder(), inParam, outParam, result));
+                                provider, serviceName, myBinder, myBinder.asBinder(), inParam, outParam, result));
                     } catch (RemoteException e) {
                         e.printStackTrace();
                     }
@@ -134,31 +147,70 @@ public class BaseActivity extends Activity {
                 Bundle params = new Bundle();
                 params.putString("param", "invoke from " + getTag());
                 String methodName = "methodName";
-                IInvokeCallback callback = new IInvokeCallback() {
+                ICall callback = new ICall() {
                     @Override
-                    public Bundle onCallback(Bundle params) {
+                    public Bundle onCall(Bundle params) {
                         Log.d(getTag(), String.format("onCallback() in %s: params = %s",
-                                getTag(), unparse(params)));
+                                getTag(), CommonUtils.unparse(params)));
                         return null;
                     }
                 };
 
                 int invokeTime = sInvokeTimes.addAndGet(1);
-                Log.d(getTag(), String.format("invoke() start in [process %s](%d) : " +
+                Log.d(getTag(), String.format("invoke() start at (%d) : " +
                                 "provider = %s, serviceName = %s, methodName = %s, params = %s, callback = %s",
-                        CommonUtils.getCurrentProcessName(BaseActivity.this), invokeTime,
-                        provider, serviceName, methodName, unparse(params), callback));
+                        invokeTime, provider, serviceName, methodName, CommonUtils.unparse(params), callback));
                 if (AndInvoker.invokeNoThrow(BaseActivity.this, provider, serviceName,
                         methodName, params, callback) == null) {
-                    Log.e(getTag(), String.format("invoke() ERROR in [process %s] : " +
+                    Log.e(getTag(), String.format("invoke() ERROR : " +
                                     "provider = %s, serviceName = %s, methodName = %s, params = %s, callback = %s",
-                            CommonUtils.getCurrentProcessName(BaseActivity.this), provider, serviceName, methodName, unparse(params), callback));
+                            provider, serviceName, methodName, CommonUtils.unparse(params), callback));
                 }
 
-                Log.d(getTag(), String.format("invoke() finished in [process %s](%d) : " +
+                Log.d(getTag(), String.format("invoke() finished at (%d) : " +
                                 "provider = %s, serviceName = %s, methodName = %s, params = %s, callback = %s",
-                        CommonUtils.getCurrentProcessName(BaseActivity.this), invokeTime,
-                        provider, serviceName, methodName, unparse(params), callback));
+                        invokeTime, provider, serviceName, methodName, CommonUtils.unparse(params), callback));
+            }
+        }).start();
+
+    }
+
+    private void invokeInterface(final String serviceName, final String provider) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String interfaceName = serviceName;
+                IMyInterface myInterface = AndInvoker.fetchInterfaceNoThrow(BaseActivity.this, provider,
+                        interfaceName, IMyInterface.class);
+                Log.d(getTag(), String.format("invokeInterface() start : provider = %s, " +
+                        "interfaceName = %s, interfaceObj = %s", provider, interfaceName, myInterface));
+                String result = null;
+                if (myInterface == null) {
+                    Log.e(getTag(), String.format("invokeInterface() ERROR: " +
+                            "provider = %s, serviceName = %s", provider, serviceName));
+                    return;
+                }
+                result = myInterface.testBasicTypes(1, 200L, "test", new MyItem("test"),
+                        CommonUtils.newBundle("test bundle"),
+                        new MyBinder(BaseActivity.this),
+                        Arrays.asList(true, false, true));
+                Log.d(getTag(), String.format("invokeInterface() testBasicTypes finish: provider = %s, " +
+                        "result = %s", provider, result));
+
+                myInterface.testVoid();
+                Log.d(getTag(), String.format("invokeInterface() testVoid finish", provider));
+
+
+                IMyInterface returnInterface = null;
+                if (myInterface != null) {
+                    returnInterface = myInterface.testInterface(new IMyInterfaceImpl(BaseActivity.this));
+                    returnInterface.testBasicTypes(1, 4L, "test result of testInterface",
+                            new MyItem("test result of testInterface"),
+                            CommonUtils.newBundle("test bundle"),
+                            new MyBinder(BaseActivity.this), null);
+                }
+                Log.d(getTag(), String.format("invokeInterface() testInterface finish: provider = %s, returnInterface = %s",
+                        provider, returnInterface));
             }
         }).start();
 
@@ -168,8 +220,4 @@ public class BaseActivity extends Activity {
         return CommonUtils.getTag(this);
     }
 
-    private static Bundle unparse(Bundle bundle) {
-        bundle.size();
-        return bundle;
-    }
 }

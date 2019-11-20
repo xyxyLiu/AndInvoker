@@ -2,6 +2,7 @@ package com.reginald.andinvoker.demo;
 
 import android.app.ActivityManager;
 import android.content.Context;
+import android.os.Bundle;
 import android.text.TextUtils;
 
 import java.io.BufferedReader;
@@ -118,6 +119,17 @@ public class CommonUtils {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    public static Bundle newBundle(String value) {
+        Bundle bundle = new Bundle();
+        bundle.putString("key", value);
+        return bundle;
+    }
+
+    public static Bundle unparse(Bundle bundle) {
+        bundle.size();
+        return bundle;
     }
 
 }

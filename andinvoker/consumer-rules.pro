@@ -1,3 +1,1 @@
--keep class com.reginald.andinvoker.api.** {
-    <methods>;
-}
+-keep @com.reginald.andinvoker.api.RemoteInterface class ** { public <methods>;}
