@@ -5,9 +5,9 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.Process;
 import android.os.RemoteException;
 import android.text.TextUtils;
 
@@ -25,20 +25,14 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * ContentProvider used for internal rpc. You must register this in AndroidManifest.xml for the process where IInovker registered
+ * ContentProvider used for internal ipc. You must register this in AndroidManifest.xml for the process where IInovker registered
  */
 public class AndInvokerProvider extends ContentProvider {
     private static final String TAG = "AndInvokerProvider";
 
-    private static InvokerStub sInvokerStub;
-    private static final Map<String, IServiceFetcher> sRegisteredServiceFetcher =
-            new ConcurrentHashMap<>();
-    private static final Map<String, Class<? extends IInvoker>> sRegisteredIInvokerClass =
-            new ConcurrentHashMap<>();
-    private static final Map<String, InterfaceInfo<?>> sRegisteredInterfaces =
-            new ConcurrentHashMap<>();
-
     public static final String KEY_SERVICE = "key.service";
+    public static final String KEY_PID = "key.pid";
+    public static final String KEY_UID = "key.uid";
     public static final String METHOD_GET_INVOKER = "method.get_invoker";
 
     private static final String KEY_REMOTE_BRIDGE_TYPE = "ai_remote_bridge_type";
@@ -46,6 +40,8 @@ public class AndInvokerProvider extends ContentProvider {
     private static final int REMOTE_BRIDGE_TYPE_BINDER = 1;
     private static final int REMOTE_BRIDGE_TYPE_INVOKER = 2;
     private static final int REMOTE_BRIDGE_TYPE_INTERFACE = 3;
+
+    private InvokerStub mInvokerStub;
 
     private static Bundle buildRemoteParams(int type) {
         Bundle bundle = new Bundle();
@@ -55,9 +51,9 @@ public class AndInvokerProvider extends ContentProvider {
 
     @Override
     public boolean onCreate() {
-        if (sInvokerStub == null) {
-            sInvokerStub = new InvokerStub(getContext());
-            LogUtil.d(TAG, "onCreate() sInvokerStub = " + sInvokerStub);
+        if (mInvokerStub == null) {
+            mInvokerStub = new InvokerStub(getContext());
+            LogUtil.d(TAG, "onCreate() sInvokerStub = " + mInvokerStub);
         }
         return true;
     }
@@ -92,9 +88,11 @@ public class AndInvokerProvider extends ContentProvider {
 
         if (!TextUtils.isEmpty(method)) {
             if (method.equals(METHOD_GET_INVOKER)) {
-                BinderParcelable binderParcelable = new BinderParcelable(sInvokerStub.asBinder());
+                BinderParcelable binderParcelable = new BinderParcelable(mInvokerStub.asBinder());
                 Bundle bundle = new Bundle();
                 bundle.putParcelable(KEY_SERVICE, binderParcelable);
+                bundle.putInt(KEY_PID, Process.myPid());
+                bundle.putInt(KEY_UID, Process.myUid());
                 return bundle;
             } else {
                 LogUtil.w(TAG, "call method " + method + " NOT supported!");
@@ -103,30 +101,17 @@ public class AndInvokerProvider extends ContentProvider {
         return null;
     }
 
-    static boolean registerLocalService(String serviceName, IServiceFetcher serviceFetcher) {
-        if (sInvokerStub != null) {
-            sInvokerStub.registerLocalService(serviceName, serviceFetcher);
-            return true;
-        }
-
-        return false;
-    }
-
     static boolean registerService(Context context, InvokerBridge invokerBridge, String serviceName,
-            final Binder binder) throws InvokeException {
-        if (invokerBridge == sInvokerStub) {
-            return registerLocalService(serviceName, new IServiceFetcher() {
-                @Override
-                public IBinder onFetchService(Context context) {
-                    return binder;
-                }
-            });
+            final IServiceFetcher<IBinder> serviceFetcher) throws InvokeException {
+        if (invokerBridge instanceof InvokerStub.Stub) {
+            ((InvokerStub) invokerBridge).registerLocalService(serviceName, serviceFetcher);
+            return true;
         } else {
             try {
                 InvokerStub stub = null;
-                if (binder != null) {
+                if (serviceFetcher != null) {
                     stub = new InvokerStub(context);
-                    stub.mLocalBinderCacheMap.put(serviceName, binder);
+                    stub.registerLocalService(serviceName, serviceFetcher);
                 }
                 return invokerBridge.register(serviceName, stub,
                         buildRemoteParams(REMOTE_BRIDGE_TYPE_BINDER));
@@ -136,32 +121,17 @@ public class AndInvokerProvider extends ContentProvider {
         }
     }
 
-    static void registerLocalInvoker(String serviceName, Class<? extends IInvoker> iInvokerClass) {
-        if (iInvokerClass != null) {
-            sRegisteredIInvokerClass.put(serviceName, iInvokerClass);
-        }
-    }
-
-
-    static boolean registerLocalInvoker(String serviceName, IInvoker invoker) {
-        if (sInvokerStub != null) {
-            sInvokerStub.registerLocalInvoker(serviceName, invoker);
-            return true;
-        }
-
-        return false;
-    }
-
     static boolean registerInvoker(Context context, InvokerBridge invokerBridge, String serviceName,
-            IInvoker invoker) throws InvokeException {
-        if (invokerBridge == sInvokerStub) {
-            return registerLocalInvoker(serviceName, invoker);
+            final IServiceFetcher<IInvoker> invokerFetcher) throws InvokeException {
+        if (invokerBridge instanceof InvokerStub.Stub) {
+            ((InvokerStub) invokerBridge).registerLocalInvoker(serviceName, invokerFetcher);
+            return true;
         } else {
             try {
                 InvokerStub stub = null;
-                if (invoker != null) {
+                if (invokerFetcher != null) {
                     stub = new InvokerStub(context);
-                    stub.mLocalInvokerCacheMap.put(serviceName, invoker);
+                    stub.registerLocalInvoker(serviceName, invokerFetcher);
                 }
                 return invokerBridge.register(serviceName, stub,
                         buildRemoteParams(REMOTE_BRIDGE_TYPE_INVOKER));
@@ -171,29 +141,22 @@ public class AndInvokerProvider extends ContentProvider {
         }
     }
 
-    static <T> boolean registerLocalInterface(String serviceName, T object, Class<T> clazz) {
-        if (sInvokerStub != null) {
-            InterfaceInfo interfaceInfo = null;
-            if (object != null && clazz != null) {
-                interfaceInfo = new InterfaceInfo(object, clazz);
-            }
-            sInvokerStub.registerLocalInterface(serviceName, interfaceInfo);
-            return true;
-        }
-
-        return false;
-    }
-
     static <T> boolean registerInterface(Context context, InvokerBridge invokerBridge, String serviceName,
             T object, Class<T> clazz) throws InvokeException {
-        if (invokerBridge == sInvokerStub) {
-            return registerLocalInterface(serviceName, object, clazz);
+        InterfaceInfo interfaceInfo = null;
+        if (object != null && clazz != null) {
+            interfaceInfo = new InterfaceInfo<T>(object, clazz);
+        }
+
+        if (invokerBridge instanceof InvokerStub.Stub) {
+            ((InvokerStub) invokerBridge).registerLocalInterface(serviceName, interfaceInfo);
+            return true;
         } else {
             try {
                 InvokerStub stub = null;
                 if (object != null && clazz != null) {
                     stub = new InvokerStub(context);
-                    stub.mLocalInterfaceCacheMap.put(serviceName, new InterfaceInfo<T>(object, clazz));
+                    stub.registerLocalInterface(serviceName, interfaceInfo);
                 }
                 return invokerBridge.register(serviceName, stub,
                         buildRemoteParams(REMOTE_BRIDGE_TYPE_INTERFACE));
@@ -205,6 +168,13 @@ public class AndInvokerProvider extends ContentProvider {
 
     private static class InvokerStub extends InvokerBridge.Stub {
         private String TAG = "InvokerStub";
+
+        private final Map<String, IServiceFetcher<IBinder>> mRegisteredServiceFetcher =
+                new ConcurrentHashMap<>();
+        private final Map<String, IServiceFetcher<IInvoker>> mRegisteredIInvokerFetcher =
+                new ConcurrentHashMap<>();
+        private final Map<String, InterfaceInfo<?>> mRegisteredInterfaces =
+                new ConcurrentHashMap<>();
 
         private final Map<String, IInvoker> mLocalInvokerCacheMap = new ConcurrentHashMap<>();
         private final Map<String, BridgeRecord> mRemoteInvokerCacheMap = new ConcurrentHashMap<>();
@@ -219,7 +189,7 @@ public class AndInvokerProvider extends ContentProvider {
             mContext = context;
         }
 
-        private IServiceFetcher fetchLocalService(String serviceName) {
+        private IServiceFetcher<IBinder> fetchLocalService(String serviceName) {
             LogUtil.d(TAG, "fetchLocalService() serviceName = %s", serviceName);
             if (serviceName == null) {
                 LogUtil.w(TAG, String.format("fetchLocalService() serviceName is Null! " +
@@ -227,7 +197,7 @@ public class AndInvokerProvider extends ContentProvider {
                 return null;
             }
 
-            IServiceFetcher serviceFetcher = sRegisteredServiceFetcher.get(serviceName);
+            IServiceFetcher serviceFetcher = mRegisteredServiceFetcher.get(serviceName);
 
             if (serviceFetcher == null) {
                 LogUtil.w(TAG, String.format("fetchLocalService() no serviceFetcher found for %s",
@@ -256,17 +226,20 @@ public class AndInvokerProvider extends ContentProvider {
                 }
 
                 try {
-                    Class<? extends IInvoker> invokerClazz = sRegisteredIInvokerClass.get(serviceName);
-                    if (invokerClazz != null) {
-                        resultInvoker = invokerClazz.newInstance();
+                    IServiceFetcher<IInvoker> invokerFetcher = mRegisteredIInvokerFetcher.get(serviceName);
+                    if (invokerFetcher != null) {
+                        resultInvoker = invokerFetcher.onFetchService(mContext);
 
                         if (resultInvoker != null) {
                             LogUtil.d(TAG, "fetchLocalInvoker() serviceName = %s, " +
-                                            "new invoker from class %s",
-                                    serviceName, invokerClazz);
+                                            "new invoker from invokerFetcher %s",
+                                    serviceName, invokerFetcher);
                             mLocalInvokerCacheMap.put(serviceName, resultInvoker);
+                            return resultInvoker;
+                        } else {
+                            throw new InvokeException(String.format("invoker fetch null for %s",
+                                    serviceName));
                         }
-                        return resultInvoker;
                     }
                 } catch (Throwable t) {
                     if (LogUtil.LOG_ENABLED) {
@@ -289,25 +262,30 @@ public class AndInvokerProvider extends ContentProvider {
                 return null;
             }
 
-            InterfaceInfo<?> interfaceInfo = mLocalInterfaceCacheMap.get(interfaceName);
+            synchronized (mLocalInterfaceCacheMap) {
+                InterfaceInfo<?> interfaceInfo = mLocalInterfaceCacheMap.get(interfaceName);
 
-            if (interfaceInfo == null) {
-                interfaceInfo = sRegisteredInterfaces.get(interfaceName);
+                if (interfaceInfo != null) {
+                    return interfaceInfo;
+                }
+
+                interfaceInfo = mRegisteredInterfaces.get(interfaceName);
+                if (interfaceInfo != null) {
+                    mLocalInterfaceCacheMap.put(interfaceName, interfaceInfo);
+                    return interfaceInfo;
+                } else {
+                    throw new InvokeException(String.format("interface fetch null for %s",
+                            interfaceName));
+                }
             }
-
-            if (interfaceInfo == null) {
-                LogUtil.w(TAG, String.format("fetchLocalInterface() no interface found for %s",
-                        interfaceName));
-            }
-
-            return interfaceInfo;
         }
 
         private InvokerBridge fetchRemoteBridge(String name,
                 Map<String, BridgeRecord> remoteBridges) {
-            LogUtil.d(TAG, "fetchRemoteBridge() name = %s", name);
-            if (name == null) {
-                LogUtil.w(TAG, String.format("fetchRemoteBridge() name is Null! " +
+            LogUtil.d(TAG, "fetchRemoteBridge() name = %s, remoteBridges = %s",
+                    name, remoteBridges);
+            if (name == null || remoteBridges == null) {
+                LogUtil.w(TAG, String.format("fetchRemoteBridge() name or remoteBridges is Null! " +
                         "for serviceName %s", name));
                 return null;
             }
@@ -317,7 +295,7 @@ public class AndInvokerProvider extends ContentProvider {
             synchronized (remoteBridges) {
                 BridgeRecord bridgeRecord = remoteBridges.get(name);
                 invokerBridge = bridgeRecord != null ? bridgeRecord.bridge : null;
-                LogUtil.w(TAG, String.format("fetchRemoteBridge() registered invokerBridge = %s",
+                LogUtil.w(TAG, String.format("fetchRemoteBridge() registered invokerBridge(size = %d) = %s",
                         remoteBridges.size(), invokerBridge));
             }
 
@@ -330,7 +308,7 @@ public class AndInvokerProvider extends ContentProvider {
                 }
             }
 
-            LogUtil.w(TAG, String.format("fetchRemoteBridge() no invoker found for %s",
+            LogUtil.w(TAG, String.format("fetchRemoteBridge() no bridge found for %s",
                     name));
 
             return null;
@@ -356,14 +334,19 @@ public class AndInvokerProvider extends ContentProvider {
                     return cachedBinder;
                 }
 
-                IServiceFetcher serviceFetcher = fetchLocalService(serviceName);
+                IServiceFetcher<IBinder> serviceFetcher = fetchLocalService(serviceName);
                 if (serviceFetcher != null) {
                     LogUtil.w(TAG,
                             String.format("fetchService() NOT found for %s", serviceName));
 
                     IBinder newBinder = serviceFetcher.onFetchService(mContext);
-                    mLocalBinderCacheMap.put(serviceName, newBinder);
-                    return newBinder;
+                    if (newBinder != null) {
+                        mLocalBinderCacheMap.put(serviceName, newBinder);
+                        return newBinder;
+                    } else {
+                        throw new InvokeException(String.format("binder fetch null for %s",
+                                serviceName));
+                    }
                 }
             }
 
@@ -373,7 +356,7 @@ public class AndInvokerProvider extends ContentProvider {
                 return invokerBridge.fetchService(serviceName, null);
             }
 
-            throw new InvokeException(String.format("no service found for %s",
+            throw new InvokeException(String.format("no binder service found for %s",
                     serviceName));
         }
 
@@ -401,8 +384,7 @@ public class AndInvokerProvider extends ContentProvider {
                     "invoke() service = %s, method = %s, params = %s, callback = %s NOT found!",
                     serviceName, methodName, params, callback));
 
-            throw new InvokeException(String.format("no invoker found for %s",
-                    serviceName));
+            throw new InvokeException(String.format("no invoker found for %s", serviceName));
         }
 
         @Override
@@ -439,18 +421,15 @@ public class AndInvokerProvider extends ContentProvider {
                         String.format("register() serviceName is Null! for %s", serviceName));
                 throw new InvokeException(String.format("no valid serviceName for %s", serviceName));
             }
+            int callingPid = getCallingPid();
+            int callingUid = getCallingUid();
 
             Map<String, BridgeRecord> remoteBridge = null;
+            int bridgeType = -1;
 
             if (params != null) {
-                int bridgeType = params.getInt(KEY_REMOTE_BRIDGE_TYPE);
-                if (bridgeType == REMOTE_BRIDGE_TYPE_BINDER) {
-                    remoteBridge = mRemoteBinderCacheMap;
-                } else if (bridgeType == REMOTE_BRIDGE_TYPE_INVOKER) {
-                    remoteBridge = mRemoteInvokerCacheMap;
-                } else if (bridgeType == REMOTE_BRIDGE_TYPE_INTERFACE) {
-                    remoteBridge = mRemoteInterfaceCacheMap;
-                }
+                bridgeType = params.getInt(KEY_REMOTE_BRIDGE_TYPE, -1);
+                remoteBridge = getBridgeMap(bridgeType);
             }
 
             if (remoteBridge == null) {
@@ -459,7 +438,7 @@ public class AndInvokerProvider extends ContentProvider {
                 throw new InvokeException(String.format("no valid remoteBridge found for %s", serviceName));
             }
 
-            LogUtil.w(TAG,
+            LogUtil.d(TAG,
                     String.format("register() serviceName = %s, remoteBridgeMap = %s, bridge = %s, params = %s",
                             serviceName, remoteBridge, bridge, params));
 
@@ -480,7 +459,8 @@ public class AndInvokerProvider extends ContentProvider {
                         }
 
                         // add new bridge
-                        BridgeRecord br = new BridgeRecord(serviceName, bridge);
+                        BridgeRecord br = new BridgeRecord(serviceName, bridge, bridgeType,
+                                callingPid, callingUid);
                         br.linkToDeath();
                         remoteBridge.put(serviceName, br);
                         return true;
@@ -488,34 +468,24 @@ public class AndInvokerProvider extends ContentProvider {
                 }
             }
 
-            return false;
+            throw new InvokeException(String.format("remote register error for %s!", serviceName));
         }
 
-        private void registerLocalInvoker(String serviceName, IInvoker iInvoker) {
-            if (iInvoker == null) {
-                // remove local registered
-                synchronized (mLocalInvokerCacheMap) {
-                    mLocalInvokerCacheMap.remove(serviceName);
-                }
-                sRegisteredIInvokerClass.remove(serviceName);
-
-                // remove remote registered
-                synchronized (mRemoteInvokerCacheMap) {
-                    mRemoteInvokerCacheMap.remove(serviceName);
-                }
-            } else {
-                synchronized (mLocalInvokerCacheMap) {
-                    mLocalInvokerCacheMap.put(serviceName, iInvoker);
-                }
+        private Map<String, BridgeRecord> getBridgeMap(int bridgeType) {
+            if (bridgeType == REMOTE_BRIDGE_TYPE_BINDER) {
+                return mRemoteBinderCacheMap;
+            } else if (bridgeType == REMOTE_BRIDGE_TYPE_INVOKER) {
+                return mRemoteInvokerCacheMap;
+            } else if (bridgeType == REMOTE_BRIDGE_TYPE_INTERFACE) {
+                return mRemoteInterfaceCacheMap;
             }
 
-            LogUtil.d(TAG, "registerLocalInvoker() for serviceName = %s, iInvoker = %s",
-                    serviceName, iInvoker);
+            return null;
         }
 
-        private void registerLocalService(String serviceName, IServiceFetcher serviceFetcher) {
+        private void registerLocalService(String serviceName, IServiceFetcher<IBinder> serviceFetcher) {
             if (serviceFetcher == null) {
-                sRegisteredServiceFetcher.remove(serviceName);
+                mRegisteredServiceFetcher.remove(serviceName);
 
                 // remove remote registered
                 synchronized (mRemoteBinderCacheMap) {
@@ -528,16 +498,36 @@ public class AndInvokerProvider extends ContentProvider {
                 }
 
             } else {
-                sRegisteredServiceFetcher.put(serviceName, serviceFetcher);
+                mRegisteredServiceFetcher.put(serviceName, serviceFetcher);
             }
 
             LogUtil.d(TAG, "registerLocalService() for serviceName = %s, serviceFetcher = %s",
                     serviceName, serviceFetcher);
         }
 
+        private void registerLocalInvoker(String serviceName, IServiceFetcher<IInvoker> serviceFetcher) {
+            if (serviceFetcher == null) {
+                // remove local registered
+                synchronized (mLocalInvokerCacheMap) {
+                    mLocalInvokerCacheMap.remove(serviceName);
+                }
+                mRegisteredIInvokerFetcher.remove(serviceName);
+
+                // remove remote registered
+                synchronized (mRemoteInvokerCacheMap) {
+                    mRemoteInvokerCacheMap.remove(serviceName);
+                }
+            } else {
+                mRegisteredIInvokerFetcher.put(serviceName, serviceFetcher);
+            }
+
+            LogUtil.d(TAG, "registerLocalInvoker() for serviceName = %s, serviceFetcher = %s",
+                    serviceName, serviceFetcher);
+        }
+
         private void registerLocalInterface(String serviceName, InterfaceInfo<?> interfaceInfo) {
             if (interfaceInfo == null) {
-                sRegisteredInterfaces.remove(serviceName);
+                mRegisteredInterfaces.remove(serviceName);
 
                 // remove local registered
                 synchronized (mLocalInterfaceCacheMap) {
@@ -549,7 +539,7 @@ public class AndInvokerProvider extends ContentProvider {
                     mRemoteInterfaceCacheMap.remove(serviceName);
                 }
             } else {
-                sRegisteredInterfaces.put(serviceName, interfaceInfo);
+                mRegisteredInterfaces.put(serviceName, interfaceInfo);
             }
 
             LogUtil.d(TAG, "registerLocalInterface() for serviceName = %s, interfaceInfo = %s",
@@ -569,13 +559,20 @@ public class AndInvokerProvider extends ContentProvider {
         private class BridgeRecord {
             public final String serviceName;
             public final InvokerBridge bridge;
+            public final int pid;
+            public final int uid;
+            public final int bridgeType;
             public IBinder iBinder;
             private BinderDeath mBd;
 
-            public BridgeRecord(String serviceName, InvokerBridge invokerBridge) {
+            public BridgeRecord(String serviceName, InvokerBridge invokerBridge, int bridgeType,
+                    int callingPid, int callingUid) {
                 this.serviceName = serviceName;
                 this.bridge = invokerBridge;
+                this.bridgeType = bridgeType;
                 this.iBinder = invokerBridge.asBinder();
+                this.pid = callingPid;
+                this.uid = callingUid;
             }
 
             public void linkToDeath() throws RemoteException {
@@ -597,6 +594,17 @@ public class AndInvokerProvider extends ContentProvider {
                 }
             }
 
+            @Override
+            public String toString() {
+                if (LogUtil.LOG_ENABLED) {
+                    return String.format("BridgeRecord[ serviceName = %s, bridge =%s, bridgeType = %d, " +
+                                    "pid = %d, uid = %s ]",
+                            serviceName, bridge, bridgeType, pid, uid);
+                } else {
+                    return super.toString();
+                }
+            }
+
             private class BinderDeath implements IBinder.DeathRecipient {
                 private final BridgeRecord mBr;
 
@@ -613,25 +621,21 @@ public class AndInvokerProvider extends ContentProvider {
                         mBr.iBinder.unlinkToDeath(this, 0);
                         mBr.iBinder = null;
 
-                        onRemoteInvokerDied(serviceName);
+                        onRemoteBridgeDied(mBr);
                     }
                 }
             }
         }
 
-        private void onRemoteInvokerDied(String serviceName) {
-            LogUtil.w(TAG, "onRemoteInvokerDied() serviceName = " + serviceName);
+        private void onRemoteBridgeDied(BridgeRecord bridgeRecord) {
+            LogUtil.w(TAG, "onRemoteBridgeDied() bridgeRecord = " + bridgeRecord);
 
-            synchronized (mRemoteBinderCacheMap) {
-                mRemoteBinderCacheMap.remove(serviceName);
-            }
+            Map<String, BridgeRecord> map = getBridgeMap(bridgeRecord.bridgeType);
 
-            synchronized (mRemoteInvokerCacheMap) {
-                mRemoteInvokerCacheMap.remove(serviceName);
-            }
-
-            synchronized (mLocalBinderCacheMap) {
-                mLocalBinderCacheMap.remove(serviceName);
+            if (map != null) {
+                synchronized (map) {
+                    map.remove(bridgeRecord.serviceName);
+                }
             }
         }
     }

@@ -5,7 +5,6 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
 import android.net.Uri;
-import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.RemoteException;
@@ -34,6 +33,172 @@ public class AndInvoker {
     private static final String TAG = "AndInvoker";
 
     private static final Map<String, InvokerBridge> sInvokerClientMap = new HashMap<>(2);
+
+    /**
+     * fetch binder service from IInvoker
+     * @param context Context
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName
+     * @return binder service or null
+     * @throws InvokeException InvokeException throws if fetch fails
+     */
+    public static IBinder fetchService(Context context, String provider, String serviceName)
+            throws InvokeException {
+        InvokerBridge invokerManager = ensureService(context, provider);
+        IBinder iBinder = null;
+        if (invokerManager != null) {
+            try {
+                iBinder = invokerManager.fetchService(serviceName, null);
+                return iBinder;
+            } catch (RemoteException e) {
+                throw new InvokeException(e);
+            }
+        }
+
+        throw new InvokeException(String.format("no binder service found for %s @ %s",
+                serviceName, provider));
+    }
+
+    /**
+     * register binder service in remote process dynamically.
+     * @param context Context
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
+     * @param serviceFetcher instance of IServiceFetcher
+     * @return if success
+     * @throws InvokeException InvokeException throws if register fails
+     */
+    public static boolean registerService(Context context, String provider, String serviceName,
+            IServiceFetcher<IBinder> serviceFetcher) throws InvokeException {
+        if (serviceFetcher != null) {
+            InvokerBridge invokerManager = ensureService(context, provider);
+            if (invokerManager != null) {
+                return AndInvokerProvider.registerService(context, invokerManager,
+                        serviceName, serviceFetcher);
+            }
+        }
+
+        throw new InvokeException(String.format("service register failed for %s @ %s",
+                serviceName, provider));
+    }
+
+    /**
+     * register binder service in remote process dynamically.
+     * @param context Context
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
+     * @param binder binder service
+     * @return if success
+     * @throws InvokeException InvokeException throws if register fails
+     */
+    public static boolean registerService(Context context, String provider, String serviceName,
+            final IBinder binder) throws InvokeException {
+        if (binder != null) {
+            return registerService(context, provider, serviceName, new IServiceFetcher<IBinder>() {
+                @Override
+                public IBinder onFetchService(Context context) {
+                    return binder;
+                }
+            });
+        }
+
+        throw new InvokeException(String.format("service register failed for %s @ %s",
+                serviceName, provider));
+    }
+
+    /**
+     * unregister binder service
+     * @param context Context
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName
+     * @return if success
+     * @throws InvokeException InvokeException throws if register fails
+     */
+    public static boolean unregisterService(Context context, String provider, String serviceName)
+            throws InvokeException {
+        InvokerBridge invokerManager = ensureService(context, provider);
+        if (invokerManager != null) {
+            return AndInvokerProvider.registerService(context, invokerManager, serviceName, null);
+        }
+
+        throw new InvokeException(String.format("service unregister failed for %s @ %s",
+                serviceName, provider));
+    }
+
+    /**
+     * register IInvoker in local/remote process dynamically.
+     * @param context Context
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
+     * @param iInvokerClass type of IInvoker
+     * @return if success
+     * @throws InvokeException InvokeException throws if register fails
+     */
+    public static boolean registerInvoker(Context context, String provider, String serviceName,
+            final Class<? extends IInvoker> iInvokerClass) {
+        if (iInvokerClass != null) {
+            return registerInvoker(context, provider, serviceName, new IServiceFetcher<IInvoker>() {
+                @Override
+                public IInvoker onFetchService(Context context) {
+                    try {
+                        return iInvokerClass.newInstance();
+                    } catch (Exception e) {
+                        LogUtil.e(TAG, "registerInvoker() new Instance error!", e);
+                    }
+                    return null;
+                }
+            });
+        }
+
+        throw new InvokeException(String.format("invoker register failed for %s @ %s",
+                serviceName, provider));
+    }
+
+    /**
+     * register IInvoker in local/remote process dynamically.
+     * @param context Context
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
+     * @param invoker instance of IInvoker
+     * @return if success
+     * @throws InvokeException InvokeException throws if register fails
+     */
+    public static boolean registerInvoker(Context context, String provider, String serviceName,
+            final IInvoker invoker) {
+        if (invoker != null) {
+            return registerInvoker(context, provider, serviceName, new IServiceFetcher<IInvoker>() {
+                @Override
+                public IInvoker onFetchService(Context context) {
+                    return invoker;
+                }
+            });
+        }
+
+        throw new InvokeException(String.format("invoker register failed for %s @ %s",
+                serviceName, provider));
+    }
+
+    /**
+     * register IInvoker in local/remote process dynamically.
+     * @param context Context
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
+     * @param invokerFetcher instance of IServiceFetcher
+     * @return if success
+     * @throws InvokeException InvokeException throws if register fails
+     */
+    public static boolean registerInvoker(Context context, String provider, String serviceName,
+            IServiceFetcher<IInvoker> invokerFetcher) throws InvokeException {
+        if (invokerFetcher != null) {
+            InvokerBridge invokerManager = ensureService(context, provider);
+            if (invokerManager != null) {
+                return AndInvokerProvider.registerInvoker(context, invokerManager, serviceName, invokerFetcher);
+            }
+        }
+
+        throw new InvokeException(String.format("invoker register failed for %s @ %s",
+                serviceName, provider));
+    }
 
     /**
      * invoke IInvoker
@@ -65,152 +230,6 @@ public class AndInvoker {
     }
 
     /**
-     * fetch binder service from IInvoker
-     * @param context Context
-     * @param provider authorities of ContentProvider
-     * @param serviceName serviceName
-     * @return binder service or null
-     * @throws InvokeException InvokeException throws if fetch fails
-     */
-    public static IBinder fetchService(Context context, String provider, String serviceName)
-            throws InvokeException {
-        InvokerBridge invokerManager = ensureService(context, provider);
-        IBinder iBinder = null;
-        if (invokerManager != null) {
-            try {
-                iBinder = invokerManager.fetchService(serviceName, null);
-                return iBinder;
-            } catch (RemoteException e) {
-                throw new InvokeException(e);
-            }
-        }
-
-        throw new InvokeException(String.format("no binder service found for %s @ %s",
-                serviceName, provider));
-    }
-
-
-    /**
-     * register IServiceFetcher in the current process statically if a ContentProvider is registered in the same process
-     * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
-     * @param serviceFetcher instance of IServiceFetcher
-     */
-    public static void registerService(String serviceName, IServiceFetcher serviceFetcher) {
-        if (serviceFetcher != null) {
-            AndInvokerProvider.registerLocalService(serviceName, serviceFetcher);
-        }
-    }
-
-    /**
-     * register binder service in the current process statically if a ContentProvider is registered in the same process
-     * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
-     * @param binderServiceClass class of binder service
-     */
-    public static void registerService(String serviceName, final Class<? extends Binder> binderServiceClass)
-            throws InvokeException {
-        if (binderServiceClass != null) {
-            AndInvokerProvider.registerLocalService(serviceName, new IServiceFetcher() {
-                @Override
-                public IBinder onFetchService(Context context) {
-                    try {
-                        Binder binder = binderServiceClass.newInstance();
-                        return binder;
-                    } catch (Exception e) {
-                        if (LogUtil.LOG_ENABLED) {
-                            e.printStackTrace();
-                        }
-                        return null;
-                    }
-                }
-            });
-        }
-    }
-
-    /**
-     * register binder service in remote process dynamically. Not Recommended!
-     * @param context Context
-     * @param provider authorities of ContentProvider
-     * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
-     * @param binder instance of binder service
-     * @return if success
-     * @throws InvokeException InvokeException throws if register fails
-     */
-    public static boolean registerRemoteService(Context context, String provider, String serviceName,
-            Binder binder) throws InvokeException {
-        if (binder != null) {
-            InvokerBridge invokerManager = ensureService(context, provider);
-            if (invokerManager != null) {
-                return AndInvokerProvider.registerService(context, invokerManager,
-                        serviceName, binder);
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * unregister binder service
-     * @param context Context
-     * @param provider authorities of ContentProvider
-     * @param serviceName serviceName
-     * @return if success
-     * @throws InvokeException InvokeException throws if register fails
-     */
-    public static boolean unregisterService(Context context, String provider, String serviceName)
-            throws InvokeException {
-        InvokerBridge invokerManager = ensureService(context, provider);
-        if (invokerManager != null) {
-            return AndInvokerProvider.registerService(context, invokerManager, serviceName, null);
-        }
-
-        return false;
-    }
-
-    /**
-     * register IInvoker in the current process statically if a ContentProvider is registered in the same process
-     * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
-     * @param iInvokerClass type of IInvoker
-     */
-    public static void registerInvoker(String serviceName,
-            Class<? extends IInvoker> iInvokerClass) {
-        if (iInvokerClass != null) {
-            AndInvokerProvider.registerLocalInvoker(serviceName, iInvokerClass);
-        }
-    }
-
-    /**
-     * register IInvoker in the current process statically if a ContentProvider is registered in the same process
-     * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
-     * @param invoker instance of IInvoker
-     */
-    public static void registerInvoker(String serviceName, IInvoker invoker) {
-        if (invoker != null) {
-            AndInvokerProvider.registerLocalInvoker(serviceName, invoker);
-        }
-    }
-
-    /**
-     * register IInvoker in remote process dynamically. Not Recommended!
-     * @param context Context
-     * @param provider authorities of ContentProvider
-     * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
-     * @param invoker instance of IInvoker
-     * @return if success
-     * @throws InvokeException InvokeException throws if register fails
-     */
-    public static boolean registerRemoteInvoker(Context context, String provider, String serviceName,
-            IInvoker invoker) throws InvokeException {
-        if (invoker != null) {
-            InvokerBridge invokerManager = ensureService(context, provider);
-            if (invokerManager != null) {
-                return AndInvokerProvider.registerInvoker(context, invokerManager, serviceName, invoker);
-            }
-        }
-
-        return false;
-    }
-
-    /**
      * unregister IInvoker
      * @param context Context
      * @param provider authorities of ContentProvider
@@ -225,21 +244,12 @@ public class AndInvoker {
             return AndInvokerProvider.registerInvoker(context, invokerManager, serviceName, null);
         }
 
-        return false;
+        throw new InvokeException(String.format("invoker unregister failed for %s @ %s",
+                serviceName, provider));
     }
 
     /**
-     * register local interface
-     * @param interfaceName interface name
-     * @param object instance
-     * @param localInterface interface class
-     */
-    public static <T> void registerInterface(String interfaceName, T object, Class<T> localInterface) {
-        AndInvokerProvider.registerLocalInterface(interfaceName, object, localInterface);
-    }
-
-    /**
-     * register IInvoker in remote process dynamically. Not Recommended!
+     * register IInvoker in remote process dynamically.
      * @param context Context
      * @param provider authorities of ContentProvider
      * @param interfaceName interface name
@@ -248,7 +258,7 @@ public class AndInvoker {
      * @return if success
      * @throws InvokeException InvokeException throws if register fails
      */
-    public static <T> boolean registerRemoteInterface(Context context, String provider, String interfaceName,
+    public static <T> boolean registerInterface(Context context, String provider, String interfaceName,
             T object, Class<T> localInterface) throws InvokeException {
         if (object != null && localInterface != null) {
             InvokerBridge invokerManager = ensureService(context, provider);
@@ -258,7 +268,8 @@ public class AndInvoker {
             }
         }
 
-        return false;
+        throw new InvokeException(String.format("interface register failed for %s @ %s",
+                interfaceName, provider));
     }
 
     /**
@@ -274,7 +285,8 @@ public class AndInvoker {
                     null, null);
         }
 
-        return false;
+        throw new InvokeException(String.format("interface unregister failed for %s @ %s",
+                interfaceName, provider));
     }
 
     /**
@@ -313,6 +325,9 @@ public class AndInvoker {
                 interfaceName, provider));
     }
 
+
+    // NO THROW VERSION APIS:
+
     /**
      * fetch binder service from IInvoker, nothrow version
      * @param context Context
@@ -333,17 +348,38 @@ public class AndInvoker {
     }
 
     /**
-     * register binder service in remote process dynamically. Not Recommended! nothrow version
+     * register binder service in remote process dynamically. nothrow version
      * @param context Context
      * @param provider authorities of ContentProvider
      * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
-     * @param binder instance of binder service
+     * @param serviceFetcher instance of IServiceFetcher
      * @return if success
      */
-    public static boolean registerRemoteServiceNoThrow(Context context, String provider, String serviceName,
-            Binder binder) throws InvokeException {
+    public static boolean registerServiceNoThrow(Context context, String provider, String serviceName,
+            IServiceFetcher<IBinder> serviceFetcher) throws InvokeException {
         try {
-            return registerRemoteService(context, provider, serviceName, binder);
+            return registerService(context, provider, serviceName, serviceFetcher);
+        } catch (Throwable t) {
+            if (LogUtil.LOG_ENABLED) {
+                t.printStackTrace();
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * register binder service in remote process dynamically. nothrow version
+     * @param context Context
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName  e.g. ${your_package_name}.serviceA
+     * @param binder instance of binder
+     * @return if success
+     */
+    public static boolean registerServiceNoThrow(Context context, String provider, String serviceName,
+            IBinder binder) throws InvokeException {
+        try {
+            return registerService(context, provider, serviceName, binder);
         } catch (Throwable t) {
             if (LogUtil.LOG_ENABLED) {
                 t.printStackTrace();
@@ -402,13 +438,55 @@ public class AndInvoker {
      * @param context Context
      * @param provider authorities of ContentProvider
      * @param serviceName serviceName
+     * @param iInvokerClass IInvoker class
+     * @return if success
+     */
+    public static boolean registerInvokerNoThrow(Context context, String provider,
+            String serviceName, final Class<? extends IInvoker> iInvokerClass) {
+        try {
+            return registerInvoker(context, provider, serviceName, iInvokerClass);
+        } catch (Throwable t) {
+            if (LogUtil.LOG_ENABLED) {
+                t.printStackTrace();
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * register IInvoker in remote process dynamically, nothrow version
+     * @param context Context
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName
      * @param invoker instance of IInvoker
      * @return if success
      */
-    public static boolean registerRemoteInvokerNoThrow(Context context, String provider,
+    public static boolean registerInvokerNoThrow(Context context, String provider,
             String serviceName, IInvoker invoker) {
         try {
-            return registerRemoteInvoker(context, provider, serviceName, invoker);
+            return registerInvoker(context, provider, serviceName, invoker);
+        } catch (Throwable t) {
+            if (LogUtil.LOG_ENABLED) {
+                t.printStackTrace();
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * register IInvoker in remote process dynamically, nothrow version
+     * @param context Context
+     * @param provider authorities of ContentProvider
+     * @param serviceName serviceName
+     * @param invokerFetcher service Fetcher
+     * @return if success
+     */
+    public static boolean registerInvokerNoThrow(Context context, String provider,
+            String serviceName, IServiceFetcher<IInvoker> invokerFetcher) {
+        try {
+            return registerInvoker(context, provider, serviceName, invokerFetcher);
         } catch (Throwable t) {
             if (LogUtil.LOG_ENABLED) {
                 t.printStackTrace();
@@ -440,7 +518,7 @@ public class AndInvoker {
 
 
     /**
-     * register IInvoker in remote process dynamically. Not Recommended! nothrow version
+     * register IInvoker in remote process dynamically. nothrow version
      * @param context Context
      * @param provider authorities of ContentProvider
      * @param interfaceName interface name
@@ -448,10 +526,10 @@ public class AndInvoker {
      * @param localInterface interface class
      * @return if success
      */
-    public static <T> boolean registerRemoteInterfaceNoThrow(Context context, String provider, String interfaceName,
+    public static <T> boolean registerInterfaceNoThrow(Context context, String provider, String interfaceName,
             T object, Class<T> localInterface) throws InvokeException {
         try {
-            return registerRemoteInterface(context, provider, interfaceName, object, localInterface);
+            return registerInterface(context, provider, interfaceName, object, localInterface);
         } catch (Throwable t) {
             if (LogUtil.LOG_ENABLED) {
                 t.printStackTrace();
@@ -463,6 +541,8 @@ public class AndInvoker {
 
     /**
      * unregister interface, nothrow version
+     * @param context Context
+     * @param provider authorities of ContentProvider
      * @param interfaceName interface name
      */
     public static <T> boolean unregisterInterfaceNoThrow(Context context, String provider,
@@ -501,11 +581,9 @@ public class AndInvoker {
 
     /**
      * add a Codec to serialize/deserialize custom class.
-     * @param srcClass
-     * @param remoteClass
-     * @param codec
-     * @param <S>
-     * @param <R>
+     * @param srcClass src class type
+     * @param remoteClass encoded class type which can be written to Parcel
+     * @param codec Codec
      */
     public static <S, R> void appendCodec(Class<S> srcClass, Class<R> remoteClass, Codec<S, R> codec) {
         InterfaceHandler.addCodec(srcClass, remoteClass, codec);
@@ -559,6 +637,8 @@ public class AndInvoker {
                 final IBinder iBinder = service.asBinder();
                 if (iBinder != null && iBinder.isBinderAlive()) {
                     return service;
+                } else {
+                    service = null;
                 }
             }
 
@@ -572,6 +652,8 @@ public class AndInvoker {
                 if (bundle != null) {
                     bundle.setClassLoader(AndInvoker.class.getClassLoader());
                     BinderParcelable bp = bundle.getParcelable(AndInvokerProvider.KEY_SERVICE);
+                    final int pid = bundle.getInt(AndInvokerProvider.KEY_PID, -1);
+                    final int uid = bundle.getInt(AndInvokerProvider.KEY_UID, -1);
                     if (bp != null) {
                         final IBinder iBinder = bp.iBinder;
                         if (iBinder != null) {
@@ -582,7 +664,7 @@ public class AndInvoker {
                                     synchronized (sInvokerClientMap) {
                                         sInvokerClientMap.remove(provider);
                                     }
-                                    onProcessDied(provider);
+                                    onProcessDied(provider, pid, uid);
                                 }
                             }, 0);
                             service = InvokerBridge.Stub.asInterface(iBinder);
@@ -599,7 +681,8 @@ public class AndInvoker {
         return service;
     }
 
-    private static void onProcessDied(String provider) {
-        LogUtil.w(TAG, "onProcessDied() provider = " + provider);
+    private static void onProcessDied(String provider, int pid, int uid) {
+        LogUtil.w(TAG, "onProcessDied() provider = %s, pid = %d, uid = %d",
+                provider, pid, uid);
     }
 }

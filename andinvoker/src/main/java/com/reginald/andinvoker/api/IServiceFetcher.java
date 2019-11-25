@@ -1,16 +1,15 @@
 package com.reginald.andinvoker.api;
 
 import android.content.Context;
-import android.os.IBinder;
 
 /**
  * Binder service api
  */
-public interface IServiceFetcher {
+public interface IServiceFetcher<T> {
     /**
-     * publish your binder service here.
+     * publish your service here.
      * @param context Context
-     * @return binder service or null
+     * @return service
      */
-    IBinder onFetchService(Context context);
+    T onFetchService(Context context);
 }

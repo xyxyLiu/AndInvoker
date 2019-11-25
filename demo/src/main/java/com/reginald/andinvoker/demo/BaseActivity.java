@@ -12,6 +12,7 @@ import android.widget.Button;
 import android.widget.TextView;
 
 import com.reginald.andinvoker.AndInvoker;
+import com.reginald.andinvoker.InvokeException;
 import com.reginald.andinvoker.api.ICall;
 
 import java.util.Arrays;
@@ -21,9 +22,14 @@ public class BaseActivity extends Activity {
     private static final int INVOKE_TIMES = 1;
     private static AtomicInteger sInvokeTimes = new AtomicInteger(0);
 
+    private IMyInterface localInterface;
+    private IMyInterface remoteInterface;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        localInterface = new IMyInterfaceImpl(BaseActivity.this);
 
         setContentView(R.layout.activity_base);
 
@@ -118,7 +124,7 @@ public class BaseActivity extends Activity {
                 IBinder binderService = AndInvoker.fetchServiceNoThrow(BaseActivity.this,
                         provider, serviceName);
                 if (binderService == null) {
-                    Log.e(getTag(), String.format("fetchBinder() ERROR : provider = %s, serviceName = %s",
+                    Log.e(getTag(), String.format("fetchBinder() fetch ERROR : provider = %s, serviceName = %s",
                             provider, serviceName));
                 }
 
@@ -162,7 +168,7 @@ public class BaseActivity extends Activity {
                         invokeTime, provider, serviceName, methodName, CommonUtils.unparse(params), callback));
                 if (AndInvoker.invokeNoThrow(BaseActivity.this, provider, serviceName,
                         methodName, params, callback) == null) {
-                    Log.e(getTag(), String.format("invoke() ERROR : " +
+                    Log.e(getTag(), String.format("invoke() fetch ERROR : " +
                                     "provider = %s, serviceName = %s, methodName = %s, params = %s, callback = %s",
                             provider, serviceName, methodName, CommonUtils.unparse(params), callback));
                 }
@@ -179,38 +185,49 @@ public class BaseActivity extends Activity {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                String interfaceName = serviceName;
-                IMyInterface myInterface = AndInvoker.fetchInterfaceNoThrow(BaseActivity.this, provider,
-                        interfaceName, IMyInterface.class);
-                Log.d(getTag(), String.format("invokeInterface() start : provider = %s, " +
-                        "interfaceName = %s, interfaceObj = %s", provider, interfaceName, myInterface));
-                String result = null;
-                if (myInterface == null) {
-                    Log.e(getTag(), String.format("invokeInterface() ERROR: " +
-                            "provider = %s, serviceName = %s", provider, serviceName));
-                    return;
-                }
-                result = myInterface.testBasicTypes(1, 200L, "test", new MyItem("test"),
-                        CommonUtils.newBundle("test bundle"),
-                        new MyBinder(BaseActivity.this),
-                        Arrays.asList(true, false, true));
-                Log.d(getTag(), String.format("invokeInterface() testBasicTypes finish: provider = %s, " +
-                        "result = %s", provider, result));
+                try {
+                    String interfaceName = serviceName;
+                    IMyInterface myInterface = remoteInterface;
+                    if (myInterface == null) {
+                        myInterface = AndInvoker.fetchInterfaceNoThrow(BaseActivity.this, provider,
+                                interfaceName, IMyInterface.class);
+                        remoteInterface = myInterface;
+                    }
 
-                myInterface.testVoid();
-                Log.d(getTag(), String.format("invokeInterface() testVoid finish", provider));
+                    Log.d(getTag(), String.format("invokeInterface() start : provider = %s, " +
+                            "interfaceName = %s, interfaceObj = %s", provider, interfaceName, myInterface));
+                    String result = null;
+                    if (myInterface == null) {
+                        Log.e(getTag(), String.format("invokeInterface() fetch ERROR: " +
+                                "provider = %s, serviceName = %s", provider, serviceName));
+                        return;
+                    }
+                    result = myInterface.testBasicTypes(1, 200L, "test", new MyItem("test"),
+                            CommonUtils.newBundle("test bundle"),
+                            new MyBinder(BaseActivity.this),
+                            Arrays.asList(true, false, true));
+                    Log.d(getTag(), String.format("invokeInterface() testBasicTypes finish: provider = %s, " +
+                            "result = %s", provider, result));
+
+                    myInterface.testVoid();
+                    Log.d(getTag(), String.format("invokeInterface() testVoid finish", provider));
 
 
-                IMyInterface returnInterface = null;
-                if (myInterface != null) {
-                    returnInterface = myInterface.testInterface(new IMyInterfaceImpl(BaseActivity.this));
+                    IMyInterface returnInterface = null;
+                    returnInterface = myInterface.testInterface(localInterface);
                     returnInterface.testBasicTypes(1, 4L, "test result of testInterface",
                             new MyItem("test result of testInterface"),
                             CommonUtils.newBundle("test bundle"),
                             new MyBinder(BaseActivity.this), null);
+
+                    Log.d(getTag(), String.format("invokeInterface() testInterface finish: provider = %s, returnInterface = %s",
+                            provider, returnInterface));
+                } catch (InvokeException e) {
+                    e.printStackTrace();
+                    Log.e(getTag(), String.format("invokeInterface() remote invoke ERROR: " +
+                            "provider = %s, serviceName = %s", provider, serviceName));
+                    remoteInterface = null;
                 }
-                Log.d(getTag(), String.format("invokeInterface() testInterface finish: provider = %s, returnInterface = %s",
-                        provider, returnInterface));
             }
         }).start();
 

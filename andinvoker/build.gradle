@@ -19,14 +19,14 @@ ext {
     libraryName = 'AndInvoker'
     artifact = 'andinvoker'     // Has to be same as your library module name
 
-    libraryDescription = 'a tiny Android rpc framework'
+    libraryDescription = 'a tiny Android ipc framework'
 
     // Your github repo link
     siteUrl = 'https://github.com/xyxyLiu/AndInvoker'
     gitUrl = 'git@github.com:xyxyLiu/AndInvoker.git'
     githubRepository= 'xyxyLiu/AndInvoker'
 
-    libraryVersion = '0.3'
+    libraryVersion = '0.4'
 
     developerId = 'xyxyLiu'
     developerName = 'xyxyLiu'

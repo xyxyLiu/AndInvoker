@@ -9,6 +9,7 @@ import java.util.List;
 
 public class IMyInterfaceImpl implements IMyInterface {
     private Context mContext;
+    private IMyInterface mReturnInterface;
 
     public IMyInterfaceImpl(Context context) {
         mContext = context;
@@ -40,17 +41,21 @@ public class IMyInterfaceImpl implements IMyInterface {
                 new MyItem("test MyItem"), CommonUtils.newBundle("test bundle"),
                 new MyBinder(mContext), null);
 
-        return new IMyInterfaceImpl(mContext) {
-            @Override
-            public String testBasicTypes(int i, long l, String s, MyItem item, Bundle bundle,
-                    IBinder binder, List<Boolean> list) {
-                Log.d(CommonUtils.getTag(mContext), String.format("testInterface() return in [process %s] :" +
-                                "i = %d, l = %d, s = %s, item = %s, bundle = %s, binder = %s, list = %s",
-                        CommonUtils.getCurrentProcessName(mContext), i, l, s, item,
-                        CommonUtils.unparse(bundle), binder, list));
+        if (mReturnInterface == null) {
+            mReturnInterface = new IMyInterfaceImpl(mContext) {
+                @Override
+                public String testBasicTypes(int i, long l, String s, MyItem item, Bundle bundle,
+                        IBinder binder, List<Boolean> list) {
+                    Log.d(CommonUtils.getTag(mContext), String.format("testInterface() return in [process %s] :" +
+                                    "i = %d, l = %d, s = %s, item = %s, bundle = %s, binder = %s, list = %s",
+                            CommonUtils.getCurrentProcessName(mContext), i, l, s, item,
+                            CommonUtils.unparse(bundle), binder, list));
 
-                return "interface_return_" + s;
-            }
-        };
+                    return "interface_return_" + s;
+                }
+            };
+        }
+
+        return mReturnInterface;
     }
 }

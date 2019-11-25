@@ -1,5 +1,7 @@
 # AndInvoker
-a tiny android ipc framework
+A tiny Android IPC framework
+
+based on Android Binder, ContentProvider. 
 
 [ ![Download](https://api.bintray.com/packages/tonyreginald/maven/AndInvoker/images/download.svg) ](https://bintray.com/tonyreginald/maven/AndInvoker/_latestVersion)
 
@@ -17,9 +19,7 @@ dependencies {
 
 ## Usage
 
-AndInvoker is based on Android Binder, ContentProvider. 
-
-### Define and register ContentProviders
+### Register ContentProviders
 
 define AndInvokerProviders for each ipc process
 ```java
@@ -46,7 +46,7 @@ register them in AndroidManifest.xml
 
 ````
 
-### Register your service
+### Register service
 
 * Register a Binder
 ```java
@@ -55,41 +55,40 @@ public class MyBinder extends IMyBinder.Stub {
     .......
 }
 
-// register a binder service with name in local process
-        AndInvoker.registerService("binder_name", new IServiceFetcher() {
-            @Override
-            public IBinder onFetchService(Context context) {
-                return new MyBinder();
-            }
-        });
+// register a binder service with name in local/remote process
+AndInvoker.registerService(context, "provider_authorities", "binder_name", new IServiceFetcher<IBinder>() {
+    @Override
+    public IBinder onFetchService(Context context) {
+        return new MyBinder();
+    }
+});
 ````
 
-* Register an Invoker in local process
+* Register an Invoker in local/remote process
 ```java
 public class MyInvoker implements IInvoker {
     @Override
     public Bundle onInvoke(Context context, String methodName, Bundle params, ICall callback) {
-        // write you code here ...
-        // ...
+        // handle invoke here ...
         
-        // callback here if you need one
+        // callback here if needed
         if (callback != null) {
             Bundle data = new Bundle();
             // ...
             callback.onCall(data);
         }
         
-        // return 
+        // return result
         return new Bundle();
     }
 }
 
 // register invoker in local process
-AndInvoker.registerInvoker("invoker_name", MyInvoker.class);
+AndInvoker.registerInvoker(context, "provider_authorities", "invoker_name", MyInvoker.class);
 ````
 
-* Register a interface in local process
-interface shared between process must be annotated with @RemoteInterface. 
+* Register a interface in local/remote process
+interface shared between processes must be annotated with **@RemoteInterface**. 
 
 ```java
 @RemoteInterface
@@ -99,7 +98,7 @@ public interface IMyInterface {
 }
 
 // register interface in local process
-AndInvoker.registerInterface("interface_name", new IMyInterfaceImpl(), IMyInterface.class);
+AndInvoker.registerInterface(context, "provider_authorities", "interface_name", new IMyInterfaceImpl(), IMyInterface.class);
 ````
 
 register data codec for your custom data type(demo: [GsonCodec](https://github.com/xyxyLiu/AndInvoker/tree/master/demo/src/main/java/com/reginald/andinvoker/demo/gson/GsonCodec.java))
@@ -113,24 +112,13 @@ AndInvoker.appendCodec(Class<S> yourCustomClass, Class<R> serializeClass, Codec<
     * [RemoteInterface](https://github.com/xyxyLiu/AndInvoker/tree/master/andinvoker/src/main/java/com/reginald/andinvoker/api/RemoteInterface.java)
     * data types registered with [Codec](https://github.com/xyxyLiu/AndInvoker/tree/master/andinvoker/src/main/java/com/reginald/andinvoker/api/Codec.java)
 
-* Register service to remote process
-```java
-// register binder in remote process
-AndInvoker.registerRemoteService(context, "remote_provider_authorities", "binder_name", new IMyInterfaceImpl(), IMyInterface.class);
-
-// register IInvoker in remote process
-AndInvoker.registerInvoker(context, "remote_provider_authorities", "invoker_name", MyInvoker.class);
-
-// register interface in remote process
-AndInvoker.registerInterface(context, "remote_provider_authorities", "interface_name", new IMyInterfaceImpl(), IMyInterface.class);
-````
 
 ### Fetch service
 
-* Fetch a remote Binder
+* Fetch a local/remote Binder
 ```java
 IBinder binderService = AndInvoker.fetchServiceNoThrow(context,
-                        "remote_provider_authorities", "binder_name");
+                        "provider_authorities", "binder_name");
 
 IMyBinder myBinder = IMyBinder.Stub.asInterface(binderService);
 
@@ -138,12 +126,17 @@ IMyBinder myBinder = IMyBinder.Stub.asInterface(binderService);
 
 * Invoke a remote IInvoker
 ```java
-Bundle result = AndInvoker.invokeNoThrow(context, "remote_provider_authorities", "invoker_name","method_name", params, callback)
+Bundle result = AndInvoker.invokeNoThrow(context, "provider_authorities", "invoker_name","method_name", params, callback)
 ````
 
 * Fetch a remote interface
 ```java
-IMyInterface myInterface = AndInvoker.fetchInterfaceNoThrow(context, "remote_provider_authorities", "interface_name", IMyInterface.class);
+IMyInterface myInterface = AndInvoker.fetchInterfaceNoThrow(context, "provider_authorities", "interface_name", IMyInterface.class);
 
-myInterface.testBasicTypes(1, 2L, "test");
+try {
+    myInterface.testBasicTypes(1, 2L, "test");
+} catch(InvokeException e) {
+    // may throw InvokeException if remote service dies or other remote errors
+}
+
 ````

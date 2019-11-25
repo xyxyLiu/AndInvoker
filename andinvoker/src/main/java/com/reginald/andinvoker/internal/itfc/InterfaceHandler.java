@@ -1,6 +1,7 @@
 package com.reginald.andinvoker.internal.itfc;
 
 import android.os.Bundle;
+import android.os.RemoteException;
 
 import com.reginald.andinvoker.AndInvoker;
 import com.reginald.andinvoker.InvokeException;
@@ -8,7 +9,6 @@ import com.reginald.andinvoker.LogUtil;
 import com.reginald.andinvoker.api.Codec;
 import com.reginald.andinvoker.api.Decoder;
 import com.reginald.andinvoker.api.Encoder;
-import com.reginald.andinvoker.api.ICall;
 import com.reginald.andinvoker.internal.Call;
 import com.reginald.andinvoker.internal.CallWrapper;
 
@@ -76,8 +76,6 @@ public class InterfaceHandler {
 
     private static <S> Object encodeInternal(S obj, Class<S> srcClass, Annotation[] annotations) {
         for (EncoderEntry<?, ?> encoderEntry : ENCODERS) {
-            LogUtil.d(TAG, "encodeInternal() obj = %s, srcClass = %s, srcClass = %s",
-                    obj, srcClass, srcClass);
             if (encoderEntry.handles(obj, srcClass)) {
                 Encoder<S, ?> encoder = (Encoder<S, ?>) encoderEntry.encoder;
                 if (encoder.handleEncode(obj, srcClass, annotations)) {
@@ -95,8 +93,6 @@ public class InterfaceHandler {
     private static <R, S> S decodeInternal(R obj, Class<S> srcClass, Annotation[] annotations) {
         for (DecoderEntry<?, ?> decoderEntry : DECODERS) {
             Class<?> remoteClass = obj.getClass();
-            LogUtil.d(TAG, "decodeInternal() obj = %s, remoteClass = %s, srcClass = %s",
-                    obj, remoteClass, srcClass);
             if (decoderEntry.handles(obj, remoteClass, srcClass)) {
                 Decoder<R, S> decoder = (Decoder<R, S>) decoderEntry.decoder;
                 if (decoder.handleDecode(obj, srcClass, annotations)) {
@@ -112,16 +108,17 @@ public class InterfaceHandler {
     }
 
     static <T> Call buildStub(final InterfaceInfo<T> interfaceInfo) {
-        ICall call = new ICall() {
+        LogUtil.d(TAG, "buildStub() for interfaceInfo = %s", interfaceInfo);
+
+        CallWrapper callWrapper = new CallWrapper() {
             @Override
             public Bundle onCall(Bundle params) {
                 InterfaceCallInfo callInfo = InterfaceHandler.unbundle(params);
-                LogUtil.d(TAG, "interface call: callInfo = %s", callInfo);
                 if (callInfo != null) {
                     String methodName = callInfo.methodName;
                     Method method = interfaceInfo.fetchMethod(methodName);
-                    LogUtil.d(TAG, "interface call: callInfo = %s, method = %s",
-                            callInfo, method);
+                    LogUtil.d(TAG, "interface call: callInfo = %s, interfaceInfo = %s, method = %s",
+                            callInfo, interfaceInfo, method);
                     if (method != null) {
                         try {
                             InterfaceHandler.handleDecodeParams(callInfo.args,
@@ -146,11 +143,12 @@ public class InterfaceHandler {
             }
         };
 
-        return CallWrapper.build(call);
+        return callWrapper;
     }
 
     static <T> T buildProxy(final InterfaceInfo<T> interfaceInfo, final Call call) {
         if (call != null) {
+            LogUtil.d(TAG, "buildProxy() for interfaceInfo = %s, call = %s", interfaceInfo, call);
             InvocationHandler invocationHandler = new InvocationHandler() {
                 @Override
                 public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
@@ -178,6 +176,11 @@ public class InterfaceHandler {
                                 return null;
                             }
                         }
+                    } catch (RemoteException e) {
+                        if (LogUtil.LOG_ENABLED) {
+                            e.printStackTrace();
+                        }
+                        throw new InvokeException(e);
                     } catch (Throwable t) {
                         if (LogUtil.LOG_ENABLED) {
                             t.printStackTrace();
@@ -188,10 +191,13 @@ public class InterfaceHandler {
                     throw new InvokeException("remote interface invoke error!");
                 }
             };
-            T instance = (T) Proxy.newProxyInstance(AndInvoker.class.getClassLoader(),
-                    new Class[]{interfaceInfo.interfaceClass}, invocationHandler);
-
-            return instance;
+            try {
+                T instance = (T) Proxy.newProxyInstance(AndInvoker.class.getClassLoader(),
+                        new Class[]{interfaceInfo.interfaceClass}, invocationHandler);
+                return instance;
+            } catch (Exception e) {
+                throw new InvokeException("remote interface proxy init error!");
+            }
         }
         return null;
     }
