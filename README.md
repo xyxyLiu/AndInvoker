@@ -46,7 +46,7 @@ register them in AndroidManifest.xml
 
 ````
 
-### Register service
+### Register service (Binder/IInvoker/Interface)
 
 * Register a Binder
 ```java
@@ -64,7 +64,7 @@ AndInvoker.registerService(context, "provider_authorities", "binder_name", new I
 });
 ````
 
-* Register an Invoker in local/remote process
+* Register an Invoker
 ```java
 public class MyInvoker implements IInvoker {
     @Override
@@ -83,11 +83,11 @@ public class MyInvoker implements IInvoker {
     }
 }
 
-// register invoker in local process
+// register invoker in local/remote process
 AndInvoker.registerInvoker(context, "provider_authorities", "invoker_name", MyInvoker.class);
 ````
 
-* Register a interface in local/remote process
+* Register an interface
 interface shared between processes must be annotated with **@RemoteInterface**. 
 
 ```java
@@ -97,7 +97,7 @@ public interface IMyInterface {
     Bundle setCallback(@RemoteInterface IMyCallback callback);
 }
 
-// register interface in local process
+// register interface in local/remote process
 AndInvoker.registerInterface(context, "provider_authorities", "interface_name", new IMyInterfaceImpl(), IMyInterface.class);
 ````
 
@@ -113,9 +113,9 @@ AndInvoker.appendCodec(Class<S> yourCustomClass, Class<R> serializeClass, Codec<
     * data types registered with [Codec](https://github.com/xyxyLiu/AndInvoker/tree/master/andinvoker/src/main/java/com/reginald/andinvoker/api/Codec.java)
 
 
-### Fetch service
+### Fetch service (Binder/IInvoker/Interface)
 
-* Fetch a local/remote Binder
+* Fetch a Binder
 ```java
 IBinder binderService = AndInvoker.fetchServiceNoThrow(context,
                         "provider_authorities", "binder_name");
@@ -124,12 +124,12 @@ IMyBinder myBinder = IMyBinder.Stub.asInterface(binderService);
 
 ````
 
-* Invoke a remote IInvoker
+* Invoke an IInvoker
 ```java
 Bundle result = AndInvoker.invokeNoThrow(context, "provider_authorities", "invoker_name","method_name", params, callback)
 ````
 
-* Fetch a remote interface
+* Fetch an interface
 ```java
 IMyInterface myInterface = AndInvoker.fetchInterfaceNoThrow(context, "provider_authorities", "interface_name", IMyInterface.class);
 
