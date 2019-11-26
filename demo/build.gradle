@@ -10,7 +10,7 @@ android {
 
     signingConfigs {
         release {
-            storeFile file("../pluginm-test.keystore")
+            storeFile file("../andinvoker-test.keystore")
             storePassword "pluginm"
             keyAlias "pluginm"
             keyPassword "pluginm"

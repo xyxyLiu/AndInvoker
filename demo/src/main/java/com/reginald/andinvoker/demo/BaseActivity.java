@@ -23,12 +23,12 @@ public class BaseActivity extends Activity {
     private static AtomicInteger sInvokeTimes = new AtomicInteger(0);
 
     private IMyInterface localInterface;
-    private IMyInterface remoteInterface;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
+        setTitle(String.format("AndInvoker v%s_%d",
+                AndInvoker.getSDKVersion(), AndInvoker.getProtocolVersion()));
         localInterface = new IMyInterfaceImpl(BaseActivity.this);
 
         setContentView(R.layout.activity_base);
@@ -88,12 +88,12 @@ public class BaseActivity extends Activity {
     private void testProcess(String processSuffix) {
         for (int i = 0; i < INVOKE_TIMES; i++) {
             String provider = getPackageName() + processSuffix;
+            fetchBinder("serviceName_binder", provider);
+            fetchBinder("serviceName_binder_remoteRegister_to_" + processSuffix, provider);
             invoke("serviceName_invoker", provider);
             invoke("serviceName_invoker_remoteRegister_to_" + processSuffix, provider);
             invokeInterface("serviceName_interface", provider);
             invokeInterface("serviceName_interface_remoteRegister_to_" + processSuffix, provider);
-            fetchBinder("serviceName_binder", provider);
-            fetchBinder("serviceName_binder_remoteRegister_to_" + processSuffix, provider);
         }
     }
 
@@ -187,12 +187,10 @@ public class BaseActivity extends Activity {
             public void run() {
                 try {
                     String interfaceName = serviceName;
-                    IMyInterface myInterface = remoteInterface;
-                    if (myInterface == null) {
-                        myInterface = AndInvoker.fetchInterfaceNoThrow(BaseActivity.this, provider,
-                                interfaceName, IMyInterface.class);
-                        remoteInterface = myInterface;
-                    }
+
+                    IMyInterface myInterface = AndInvoker.fetchInterfaceNoThrow(BaseActivity.this, provider,
+                            interfaceName, IMyInterface.class);
+
 
                     Log.d(getTag(), String.format("invokeInterface() start : provider = %s, " +
                             "interfaceName = %s, interfaceObj = %s", provider, interfaceName, myInterface));
@@ -226,7 +224,6 @@ public class BaseActivity extends Activity {
                     e.printStackTrace();
                     Log.e(getTag(), String.format("invokeInterface() remote invoke ERROR: " +
                             "provider = %s, serviceName = %s", provider, serviceName));
-                    remoteInterface = null;
                 }
             }
         }).start();

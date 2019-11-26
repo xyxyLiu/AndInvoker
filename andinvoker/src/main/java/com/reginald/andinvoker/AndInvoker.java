@@ -15,10 +15,12 @@ import com.reginald.andinvoker.api.Encoder;
 import com.reginald.andinvoker.api.ICall;
 import com.reginald.andinvoker.api.IInvoker;
 import com.reginald.andinvoker.api.IServiceFetcher;
+import com.reginald.andinvoker.api._IRemote;
 import com.reginald.andinvoker.internal.BinderParcelable;
 import com.reginald.andinvoker.internal.Call;
 import com.reginald.andinvoker.internal.CallWrapper;
 import com.reginald.andinvoker.internal.InvokerBridge;
+import com.reginald.andinvoker.internal.cache.BinderCache;
 import com.reginald.andinvoker.internal.itfc.InterfaceHandler;
 import com.reginald.andinvoker.internal.itfc.InterfaceInfo;
 import com.reginald.andinvoker.internal.itfc.InterfaceParcelable;
@@ -27,12 +29,23 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * IInvoker register/unregister/invoker/fetchService APIs
+ *  register/unregister services
+ *  invoke/fetchService/fetchInterface APIs
  */
 public class AndInvoker {
     private static final String TAG = "AndInvoker";
 
     private static final Map<String, InvokerBridge> sInvokerClientMap = new HashMap<>(2);
+
+    private static volatile BinderCache<IBinder> sBinderServiceCache =
+            new BinderCache<IBinder>("Client#Binder");
+    private static volatile BinderCache<_IRemote> sInterfaceServiceCache =
+            new BinderCache<_IRemote>("Client#Interface") {
+                @Override
+                public IBinder toBinder(_IRemote value) {
+                    return value != null ? value._asBinder() : null;
+                }
+            };
 
     /**
      * fetch binder service from IInvoker
@@ -42,21 +55,26 @@ public class AndInvoker {
      * @return binder service or null
      * @throws InvokeException InvokeException throws if fetch fails
      */
-    public static IBinder fetchService(Context context, String provider, String serviceName)
-            throws InvokeException {
-        InvokerBridge invokerManager = ensureService(context, provider);
-        IBinder iBinder = null;
-        if (invokerManager != null) {
-            try {
-                iBinder = invokerManager.fetchService(serviceName, null);
-                return iBinder;
-            } catch (RemoteException e) {
-                throw new InvokeException(e);
-            }
-        }
+    public static IBinder fetchService(final Context context, final String provider,
+            final String serviceName) throws InvokeException {
+        return sBinderServiceCache.get(cacheKey(provider, serviceName), new BinderCache.Loader<IBinder>() {
+            @Override
+            public IBinder load() {
+                InvokerBridge invokerManager = ensureService(context, provider);
+                IBinder iBinder = null;
+                if (invokerManager != null) {
+                    try {
+                        iBinder = invokerManager.fetchService(serviceName, null);
+                        return iBinder;
+                    } catch (RemoteException e) {
+                        throw new InvokeException(e);
+                    }
+                }
 
-        throw new InvokeException(String.format("no binder service found for %s @ %s",
-                serviceName, provider));
+                throw new InvokeException(String.format("no binder service found for %s @ %s",
+                        serviceName, provider));
+            }
+        });
     }
 
     /**
@@ -298,31 +316,35 @@ public class AndInvoker {
      * @return proxy instance
      * @throws InvokeException InvokeException throws if interface fetch fails
      */
-    public static <T> T fetchInterface(Context context, String provider, final String interfaceName,
-            final Class<T> localInterface) throws InvokeException {
-        if (interfaceName != null) {
-            InvokerBridge invokerManager = ensureService(context, provider);
-            if (invokerManager != null) {
-                try {
-                    Bundle result = invokerManager.fetchInterface(interfaceName);
-                    result.setClassLoader(AndInvoker.class.getClassLoader());
+    public static <T> T fetchInterface(final Context context, final String provider,
+            final String interfaceName, final Class<T> localInterface) throws InvokeException {
+        return (T) sInterfaceServiceCache.get(cacheKey(provider, interfaceName), new BinderCache.Loader<_IRemote>() {
+            @Override
+            public _IRemote load() {
+                InvokerBridge invokerManager = ensureService(context, provider);
+                if (invokerManager != null) {
+                    try {
+                        Bundle result = invokerManager.fetchInterface(interfaceName);
+                        result.setClassLoader(AndInvoker.class.getClassLoader());
 
-                    InterfaceInfo<T> interfaceInfo = new InterfaceInfo<>(localInterface);
-                    InterfaceParcelable interfaceParcelable = result.getParcelable("binder");
-                    if (interfaceParcelable != null) {
-                        final Call call = Call.Stub.asInterface(interfaceParcelable.iBinder);
-                        return interfaceInfo.fetchProxy(call);
+                        InterfaceInfo<T> interfaceInfo = new InterfaceInfo<>(localInterface);
+                        InterfaceParcelable interfaceParcelable = result.getParcelable("binder");
+                        if (interfaceParcelable != null) {
+                            final Call call = Call.Stub.asInterface(interfaceParcelable.iBinder);
+                            return (_IRemote) interfaceInfo.fetchProxy(call);
+                        }
+                    } catch (RemoteException e) {
+                        throw new InvokeException(e);
+                    } catch (Exception e) {
+                        throw new InvokeException(e);
                     }
-                } catch (RemoteException e) {
-                    throw new InvokeException(e);
-                } catch (Exception e) {
-                    throw new InvokeException(e);
                 }
-            }
-        }
 
-        throw new InvokeException(String.format("interface fetch error for %s @ %s",
-                interfaceName, provider));
+                throw new InvokeException(String.format("interface fetch error for %s @ %s",
+                        interfaceName, provider));
+            }
+        });
+
     }
 
 
@@ -580,6 +602,26 @@ public class AndInvoker {
     }
 
     /**
+     * check whether the remote of the binder/proxy is alive
+     * @param obj binder/proxy object
+     * @return alive
+     */
+    public static boolean isRemoteAlive(Object obj) {
+        if (obj instanceof IBinder) {
+            return ((IBinder) obj).isBinderAlive();
+        }
+
+        if (obj instanceof _IRemote) {
+            IBinder binder = ((_IRemote) obj)._asBinder();
+            if (binder != null) {
+                return binder.isBinderAlive();
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * add a Codec to serialize/deserialize custom class.
      * @param srcClass src class type
      * @param remoteClass encoded class type which can be written to Parcel
@@ -610,6 +652,14 @@ public class AndInvoker {
     }
 
     /**
+     * disable client binder/interface cache.
+     */
+    public static void noClientCache() {
+        sBinderServiceCache = BinderCache.noCache();
+        sInterfaceServiceCache = BinderCache.noCache();
+    }
+
+    /**
      * get provider info
      * @param context Context
      * @param provider authorities of ContentProvider
@@ -626,6 +676,26 @@ public class AndInvoker {
             }
         }
         return null;
+    }
+
+    /**
+     * ipc protocol version
+     * @return protocol version
+     */
+    public static int getProtocolVersion() {
+        return BuildConfig.PROTOCAL_VERSION;
+    }
+
+    /**
+     * sdk version name
+     * @return version name
+     */
+    public static String getSDKVersion() {
+        return BuildConfig.SDK_VERSION;
+    }
+
+    private static String cacheKey(String provider, String name) {
+        return String.format("[p=%s,s=%s]", provider, name);
     }
 
     private static InvokerBridge ensureService(Context context, final String provider) {
@@ -654,6 +724,11 @@ public class AndInvoker {
                     BinderParcelable bp = bundle.getParcelable(AndInvokerProvider.KEY_SERVICE);
                     final int pid = bundle.getInt(AndInvokerProvider.KEY_PID, -1);
                     final int uid = bundle.getInt(AndInvokerProvider.KEY_UID, -1);
+                    final int remoteProtocolVersion = bundle.getInt(
+                            AndInvokerProvider.KEY_PROTOCOL_VERSION, -1);
+
+                    checkProtocol(getProtocolVersion(), remoteProtocolVersion);
+
                     if (bp != null) {
                         final IBinder iBinder = bp.iBinder;
                         if (iBinder != null) {
@@ -679,6 +754,10 @@ public class AndInvoker {
         }
 
         return service;
+    }
+
+    private static void checkProtocol(int localProtocol, int remoteProtocol) throws InvokeException {
+        // TODO checkversion
     }
 
     private static void onProcessDied(String provider, int pid, int uid) {

@@ -1,15 +1,5 @@
 apply plugin: 'com.android.library'
 
-android {
-    compileSdkVersion 28
-
-    defaultConfig {
-        minSdkVersion 11
-        targetSdkVersion 28
-        consumerProguardFiles 'consumer-rules.pro'
-    }
-}
-
 // bintray upload
 ext {
     bintrayRepo = 'maven'
@@ -26,7 +16,8 @@ ext {
     gitUrl = 'git@github.com:xyxyLiu/AndInvoker.git'
     githubRepository= 'xyxyLiu/AndInvoker'
 
-    libraryVersion = '0.4'
+    libraryVersion = '0.5'
+    protocalVersion = 1
 
     developerId = 'xyxyLiu'
     developerName = 'xyxyLiu'
@@ -37,5 +28,18 @@ ext {
     allLicenses = ["Apache-2.0"]
 }
 
-apply from: 'https://raw.githubusercontent.com/nisrulz/JCenter/master/installv1.gradle'
-apply from: 'https://raw.githubusercontent.com/nisrulz/JCenter/master/bintrayv1.gradle'
+android {
+    compileSdkVersion 28
+
+    defaultConfig {
+        minSdkVersion 11
+        targetSdkVersion 28
+        consumerProguardFiles 'consumer-rules.pro'
+
+        buildConfigField("String", "SDK_VERSION", "\"${libraryVersion}\"")
+        buildConfigField("int", "PROTOCAL_VERSION", String.valueOf(protocalVersion))
+    }
+}
+
+apply from: '../publish_install.gradle'
+apply from: '../publish_bintray.gradle'

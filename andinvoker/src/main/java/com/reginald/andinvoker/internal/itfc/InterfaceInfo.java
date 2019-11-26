@@ -4,7 +4,7 @@ import android.os.IBinder;
 
 import com.reginald.andinvoker.LogUtil;
 import com.reginald.andinvoker.internal.Call;
-import com.reginald.andinvoker.internal.TokenCache;
+import com.reginald.andinvoker.internal.cache.TokenCache;
 
 import java.lang.reflect.Method;
 import java.util.Map;

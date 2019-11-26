@@ -7,8 +7,10 @@
 
     <TextView
         android:id="@+id/title"
-        android:textSize="14dp"
+        android:textSize="18dp"
         android:gravity="center"
+        android:textStyle="bold"
+        android:layout_marginTop="8dp"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />
 
@@ -49,7 +51,7 @@
 
     <Button
         android:id="@+id/btn5"
-        android:text="kill　my process"
+        android:text="kill my process"
         android:layout_margin="10dp"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />

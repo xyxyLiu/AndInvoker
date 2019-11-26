@@ -62,6 +62,7 @@ public class MyApplication extends Application {
 
         // register custom gson codec
         AndInvoker.appendCodec(Object.class, String.class, new GsonCodec());
+        //AndInvoker.noClientCache();
 
         // register binder service in local process
         AndInvoker.registerService(this, this.getPackageName() + localProcess,
@@ -98,5 +99,8 @@ public class MyApplication extends Application {
         // register interface in remote process
         AndInvoker.registerInterface(this, this.getPackageName() + remoteProcess, "serviceName_interface_remoteRegister_to_" + remoteProcess,
                 new IMyInterfaceImpl(this), IMyInterface.class);
+
+
+        // TODO BINDER INTERFACE 效率对比！！！
     }
 }

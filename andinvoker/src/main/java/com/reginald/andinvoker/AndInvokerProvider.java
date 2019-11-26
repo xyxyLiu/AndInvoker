@@ -33,6 +33,8 @@ public class AndInvokerProvider extends ContentProvider {
     public static final String KEY_SERVICE = "key.service";
     public static final String KEY_PID = "key.pid";
     public static final String KEY_UID = "key.uid";
+    public static final String KEY_PROTOCOL_VERSION = "key.pv";
+
     public static final String METHOD_GET_INVOKER = "method.get_invoker";
 
     private static final String KEY_REMOTE_BRIDGE_TYPE = "ai_remote_bridge_type";
@@ -93,6 +95,7 @@ public class AndInvokerProvider extends ContentProvider {
                 bundle.putParcelable(KEY_SERVICE, binderParcelable);
                 bundle.putInt(KEY_PID, Process.myPid());
                 bundle.putInt(KEY_UID, Process.myUid());
+                bundle.putInt(KEY_PROTOCOL_VERSION, AndInvoker.getProtocolVersion());
                 return bundle;
             } else {
                 LogUtil.w(TAG, "call method " + method + " NOT supported!");
@@ -274,8 +277,7 @@ public class AndInvokerProvider extends ContentProvider {
                     mLocalInterfaceCacheMap.put(interfaceName, interfaceInfo);
                     return interfaceInfo;
                 } else {
-                    throw new InvokeException(String.format("interface fetch null for %s",
-                            interfaceName));
+                    return null;
                 }
             }
         }

@@ -1,4 +1,4 @@
-package com.reginald.andinvoker.internal;
+package com.reginald.andinvoker.internal.cache;
 
 import com.reginald.andinvoker.LogUtil;
 
@@ -16,10 +16,6 @@ public class TokenCache<K, V> {
 
     public static <K, V> TokenCache<K, V> build(String name) {
         return new TokenCache<>(name, 1024);
-    }
-
-    public static <K, V> TokenCache<K, V> noCache(String name) {
-        return new TokenCache<>(name, 0);
     }
 
     private TokenCache(String name, int maxSize) {

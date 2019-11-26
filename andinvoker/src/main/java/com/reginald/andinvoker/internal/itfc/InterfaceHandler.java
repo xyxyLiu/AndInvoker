@@ -1,6 +1,7 @@
 package com.reginald.andinvoker.internal.itfc;
 
 import android.os.Bundle;
+import android.os.IBinder;
 import android.os.RemoteException;
 
 import com.reginald.andinvoker.AndInvoker;
@@ -9,6 +10,7 @@ import com.reginald.andinvoker.LogUtil;
 import com.reginald.andinvoker.api.Codec;
 import com.reginald.andinvoker.api.Decoder;
 import com.reginald.andinvoker.api.Encoder;
+import com.reginald.andinvoker.api._IRemote;
 import com.reginald.andinvoker.internal.Call;
 import com.reginald.andinvoker.internal.CallWrapper;
 
@@ -154,9 +156,14 @@ public class InterfaceHandler {
                 public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                     try {
                         LogUtil.d(TAG, "invoke on method = %s, args = %s", method, args);
-
+                        IBinder remoteBinder = call.asBinder();
                         if (method.getDeclaringClass() == Object.class) {
-                            return method.invoke(this, args);
+                            return method.invoke(remoteBinder, args);
+                        }
+
+                        if (method.getDeclaringClass() == _IRemote.class) {
+                            // return binder anyway
+                            return remoteBinder;
                         }
 
                         handleEncodeParams(args, method.getParameterTypes(), method.getParameterAnnotations());
@@ -193,7 +200,7 @@ public class InterfaceHandler {
             };
             try {
                 T instance = (T) Proxy.newProxyInstance(AndInvoker.class.getClassLoader(),
-                        new Class[]{interfaceInfo.interfaceClass}, invocationHandler);
+                        new Class[]{interfaceInfo.interfaceClass, _IRemote.class}, invocationHandler);
                 return instance;
             } catch (Exception e) {
                 throw new InvokeException("remote interface proxy init error!");
