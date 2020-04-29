@@ -203,7 +203,7 @@ public class InterfaceHandler {
                         new Class[]{interfaceInfo.interfaceClass, _IRemote.class}, invocationHandler);
                 return instance;
             } catch (Exception e) {
-                throw new InvokeException("remote interface proxy init error!");
+                throw new InvokeException("remote interface proxy init error!", e);
             }
         }
         return null;
