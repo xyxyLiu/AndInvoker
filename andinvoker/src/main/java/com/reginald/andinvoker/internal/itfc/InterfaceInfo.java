@@ -2,7 +2,7 @@ package com.reginald.andinvoker.internal.itfc;
 
 import android.os.IBinder;
 
-import com.reginald.andinvoker.LogUtil;
+import com.reginald.andinvoker.internal.LogUtil;
 import com.reginald.andinvoker.internal.Call;
 import com.reginald.andinvoker.internal.cache.TokenCache;
 

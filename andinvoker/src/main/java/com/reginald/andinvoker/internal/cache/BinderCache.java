@@ -3,7 +3,7 @@ package com.reginald.andinvoker.internal.cache;
 import android.os.IBinder;
 import android.os.RemoteException;
 
-import com.reginald.andinvoker.LogUtil;
+import com.reginald.andinvoker.internal.LogUtil;
 
 import java.util.HashMap;
 

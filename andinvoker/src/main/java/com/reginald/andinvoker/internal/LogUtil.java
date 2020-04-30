@@ -1,4 +1,4 @@
-package com.reginald.andinvoker;
+package com.reginald.andinvoker.internal;
 
 import android.util.Log;
 
@@ -7,13 +7,10 @@ import java.io.StringWriter;
 import java.text.SimpleDateFormat;
 
 public class LogUtil {
-    public static final boolean LOG_ENABLED = false;
-    public static final boolean ALWAYS_SHOW_ERROR = true;
+    public static boolean LOG_ENABLED = false;
+    public static boolean ALWAYS_SHOW_ERROR = false;
 
     public static final String TAG = "AndInvoker";
-
-    public static final SimpleDateFormat sSimpleDateFormat =
-            new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
 
     public static void d(String tag, String msg) {
         if (LOG_ENABLED) {

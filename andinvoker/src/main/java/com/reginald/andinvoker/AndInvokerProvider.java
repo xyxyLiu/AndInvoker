@@ -18,6 +18,7 @@ import com.reginald.andinvoker.internal.BinderParcelable;
 import com.reginald.andinvoker.internal.Call;
 import com.reginald.andinvoker.internal.CallWrapper;
 import com.reginald.andinvoker.internal.InvokerBridge;
+import com.reginald.andinvoker.internal.LogUtil;
 import com.reginald.andinvoker.internal.itfc.InterfaceInfo;
 import com.reginald.andinvoker.internal.itfc.InterfaceParcelable;
 

@@ -20,6 +20,7 @@ import com.reginald.andinvoker.internal.BinderParcelable;
 import com.reginald.andinvoker.internal.Call;
 import com.reginald.andinvoker.internal.CallWrapper;
 import com.reginald.andinvoker.internal.InvokerBridge;
+import com.reginald.andinvoker.internal.LogUtil;
 import com.reginald.andinvoker.internal.cache.BinderCache;
 import com.reginald.andinvoker.internal.itfc.InterfaceHandler;
 import com.reginald.andinvoker.internal.itfc.InterfaceInfo;
@@ -657,6 +658,10 @@ public class AndInvoker {
     public static void noClientCache() {
         sBinderServiceCache = BinderCache.noCache();
         sInterfaceServiceCache = BinderCache.noCache();
+    }
+
+    public static void debug(boolean d) {
+        LogUtil.LOG_ENABLED = d;
     }
 
     /**

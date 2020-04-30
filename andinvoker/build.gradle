@@ -16,7 +16,7 @@ ext {
     gitUrl = 'git@github.com:xyxyLiu/AndInvoker.git'
     githubRepository= 'xyxyLiu/AndInvoker'
 
-    libraryVersion = '0.6'
+    libraryVersion = '0.7'
     protocalVersion = 1
 
     developerId = 'xyxyLiu'

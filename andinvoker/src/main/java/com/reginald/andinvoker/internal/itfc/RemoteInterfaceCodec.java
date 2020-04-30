@@ -1,6 +1,6 @@
 package com.reginald.andinvoker.internal.itfc;
 
-import com.reginald.andinvoker.LogUtil;
+import com.reginald.andinvoker.internal.LogUtil;
 import com.reginald.andinvoker.api.Codec;
 import com.reginald.andinvoker.api.RemoteInterface;
 import com.reginald.andinvoker.internal.Call;

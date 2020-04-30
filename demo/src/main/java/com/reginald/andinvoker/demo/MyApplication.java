@@ -40,7 +40,7 @@ public class MyApplication extends Application {
     protected void attachBaseContext(Context base) {
         super.attachBaseContext(base);
         Log.d(TAG, "attachBaseContext() in " + CommonUtils.getTag(this));
-
+        AndInvoker.debug(true);
         // register your local service here so that remote clients can fetch the service when the process starting.
         registerMyLocalServices();
 

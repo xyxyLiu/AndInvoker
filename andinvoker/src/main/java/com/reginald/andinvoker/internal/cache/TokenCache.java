@@ -1,6 +1,6 @@
 package com.reginald.andinvoker.internal.cache;
 
-import com.reginald.andinvoker.LogUtil;
+import com.reginald.andinvoker.internal.LogUtil;
 
 import java.lang.ref.WeakReference;
 import java.util.WeakHashMap;
